@@ -1,9 +1,10 @@
-import { useMemo, useState } from 'react'
-import { Plus, AlertTriangle, Pencil, Loader2, Wallet } from 'lucide-react'
+import { useState } from 'react'
+import { Plus, Pencil, Loader2 } from 'lucide-react'
 import { useDados } from '@/hooks/useDados'
 import { useApp } from '@/contexts/AppContext'
 import { useSalvarOrcamento, useSalvarCategoria, useSalvarRenda } from '@/hooks/useMutations'
-import { envelope, orcamentoEfetivo, orcamentoRow, rendaEfetiva } from '@/lib/calc'
+import { envelope, orcamentoRow, rendaEfetiva } from '@/lib/calc'
+import { AlocacaoRenda } from './AlocacaoRenda'
 import { money, pct, mesExtenso } from '@/lib/format'
 import type { Categoria } from '@/types/db'
 import { MonthSelector } from '@/components/layout/MonthSelector'
@@ -36,15 +37,9 @@ export function OrcamentosPage() {
   const [novaCat, setNovaCat] = useState(false)
   const [editarRenda, setEditarRenda] = useState(false)
 
-  const renda = useMemo(() => rendaEfetiva(dados.rendas, mesRef, salarioBase), [dados.rendas, mesRef, salarioBase])
-  const somaOrcada = useMemo(
-    () => dados.categorias.reduce((s, c) => s + orcamentoEfetivo(dados.orcamentos, c.id, mesRef, renda), 0),
-    [dados, mesRef, renda]
-  )
-
   if (isLoading) return <Carregando />
 
-  const estourouRenda = somaOrcada > renda
+  const renda = rendaEfetiva(dados.rendas, mesRef, salarioBase)
 
   return (
     <div>
@@ -53,26 +48,7 @@ export function OrcamentosPage() {
         <MonthSelector />
       </header>
 
-      <Card className="p-4 mb-4">
-        <button onClick={() => setEditarRenda(true)} className="flex w-full items-center justify-between group">
-          <span className="flex items-center gap-1.5 text-sm text-muted-foreground group-hover:text-primary">
-            <Wallet className="h-4 w-4" /> Renda prevista <Pencil className="h-3 w-3" />
-          </span>
-          <span className="font-bold">{money(renda)}</span>
-        </button>
-        <div className="mt-2 flex items-center justify-between text-sm">
-          <span className="text-muted-foreground">Total orçado</span>
-          <span className="font-bold">{money(somaOrcada)}</span>
-        </div>
-        <Progress value={(somaOrcada / Math.max(renda, 1)) * 100} className="my-2" indicatorClassName={estourouRenda ? 'bg-destructive' : 'bg-primary'} />
-        <div className="flex items-center justify-end text-xs text-muted-foreground">
-          {estourouRenda ? (
-            <span className="flex items-center gap-1 text-destructive font-medium"><AlertTriangle className="h-3 w-3" /> {money(somaOrcada - renda)} acima da renda</span>
-          ) : (
-            <span>Sobra {money(renda - somaOrcada)}</span>
-          )}
-        </div>
-      </Card>
+      <AlocacaoRenda dados={dados} mesRef={mesRef} renda={renda} onEditarRenda={() => setEditarRenda(true)} />
 
       <div className="flex justify-end mb-2">
         <Button variant="outline" size="sm" onClick={() => setNovaCat(true)}><Plus className="h-4 w-4" /> Nova categoria</Button>

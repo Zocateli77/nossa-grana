@@ -3,6 +3,8 @@ import { Moon, Sun, LogOut, Users, Wallet, PiggyBank, Check } from 'lucide-react
 import { useApp } from '@/contexts/AppContext'
 import { useAuth } from '@/contexts/AuthContext'
 import { useDados } from '@/hooks/useDados'
+import { useSalvarRenda } from '@/hooks/useMutations'
+import { mesAtualRef } from '@/lib/dates'
 import { money } from '@/lib/format'
 import { MoneyInput } from '@/components/MoneyInput'
 import { Card } from '@/components/ui/card'
@@ -14,11 +16,14 @@ export function ConfigPage() {
   const { salarioBase, setSalarioBase, tema, alternarTema } = useApp()
   const { sair, session } = useAuth()
   const { dados } = useDados()
+  const salvarRenda = useSalvarRenda()
   const [salario, setSalario] = useState(salarioBase)
   const [salvoSalario, setSalvoSalario] = useState(false)
 
-  function salvarSalario() {
+  async function salvarSalario() {
     setSalarioBase(salario)
+    // grava como renda prevista recorrente (padrão dos próximos meses)
+    await salvarRenda.mutateAsync({ mes_referencia: mesAtualRef(), valor: salario, recorrente: true })
     setSalvoSalario(true)
     setTimeout(() => setSalvoSalario(false), 1500)
   }
@@ -29,12 +34,12 @@ export function ConfigPage() {
 
       <SecaoTitulo>Renda</SecaoTitulo>
       <Card className="p-4">
-        <Label className="flex items-center gap-2 text-foreground mb-2"><Wallet className="h-4 w-4" /> Salário / renda base do mês</Label>
+        <Label className="flex items-center gap-2 text-foreground mb-2"><Wallet className="h-4 w-4" /> Renda prevista padrão</Label>
         <div className="flex gap-2">
           <MoneyInput value={salario} onChange={setSalario} />
-          <Button onClick={salvarSalario}>{salvoSalario ? <Check className="h-4 w-4" /> : 'Salvar'}</Button>
+          <Button onClick={salvarSalario} disabled={salvarRenda.isPending}>{salvoSalario ? <Check className="h-4 w-4" /> : 'Salvar'}</Button>
         </div>
-        <p className="text-xs text-muted-foreground mt-2">Usado para calcular o "disponível livre". Atual: {money(salarioBase)}</p>
+        <p className="text-xs text-muted-foreground mt-2">Base recorrente do "disponível livre". Em Envelopes você ajusta a renda mês a mês. Atual: {money(salarioBase)}</p>
       </Card>
 
       <SecaoTitulo>Aparência</SecaoTitulo>

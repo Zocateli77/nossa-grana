@@ -2,6 +2,8 @@ export type TipoLancamento = 'despesa' | 'investimento' | 'imposto' | 'emprestim
 export type TipoReserva = 'gasto' | 'investimento' | 'imposto' | 'mesada'
 export type TipoConta = 'cartao_credito' | 'conta' | 'dinheiro' | 'emprestimo'
 export type Frequencia = 'mensal' | 'semanal' | 'anual'
+export type StatusLancamento = 'pago' | 'previsto' | 'quitado'
+export type TipoValorOrcamento = 'fixo' | 'percentual'
 
 export interface Pessoa {
   id: string
@@ -54,8 +56,19 @@ export interface Orcamento {
   categoria_id: string
   mes_referencia: string
   valor_estabelecido: number
+  tipo_valor: TipoValorOrcamento
+  percentual: number | null
   recorrente: boolean
   observacao: string | null
+}
+
+export interface Renda {
+  id: string
+  mes_referencia: string
+  valor: number
+  recorrente: boolean
+  observacao: string | null
+  criado_em: string
 }
 
 export interface Lancamento {
@@ -74,6 +87,7 @@ export interface Lancamento {
   data_primeira_parcela: string | null
   recorrente: boolean
   frequencia: Frequencia
+  status: StatusLancamento
   pago: boolean
   privado: boolean
   observacao: string | null

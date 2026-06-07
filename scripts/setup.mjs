@@ -217,6 +217,13 @@ async function main() {
   }
   console.log(`✓ ${Object.keys(todosOrc).length} envelopes (orçamentos)`)
 
+  // ---------- renda prevista (padrão recorrente) ----------
+  await client.query(
+    'insert into rendas (mes_referencia, valor, recorrente) values ($1, $2, true) on conflict (mes_referencia) do nothing',
+    [MES, 21000]
+  )
+  console.log('✓ renda prevista padrão')
+
   // ---------- meta de quitação: valor_atual = parcelas já pagas ----------
   await client.query('update metas set valor_atual = $1 where id = $2', [round2(366.64 * 7), metaId['Quitar Empréstimo Mercado Pago']])
 

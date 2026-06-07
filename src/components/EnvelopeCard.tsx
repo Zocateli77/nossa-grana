@@ -23,7 +23,7 @@ export function EnvelopeCard({ env, mostrarSemana = true }: { env: EnvelopeInfo;
   const semOrc = env.estado === 'sem_orcamento'
   return (
     <Link
-      to="/orcamentos"
+      to={`/lancamentos?categoria=${env.categoria.id}`}
       className="block rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
     >
       <div className="flex items-start gap-3">

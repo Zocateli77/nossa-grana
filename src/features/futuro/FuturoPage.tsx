@@ -18,7 +18,7 @@ export function FuturoPage() {
   const [meses, setMeses] = useState(6)
   if (isLoading) return <Carregando />
 
-  const proj = projecao(dados, salarioBase, meses)
+  const proj = projecao(dados, meses, new Date(), salarioBase)
   const dvs = dividas(dados.lancamentos).sort((a, b) => (a.ultimaParcelaMes < b.ultimaParcelaMes ? 1 : -1))
   const totalDevido = dvs.reduce((s, d) => s + d.totalDevido, 0)
   const chart = proj.map((p) => ({ mes: mesCurto(p.mesRef), saldo: Math.round(p.saldoAcumulado), saldoMes: Math.round(p.saldoMes) }))

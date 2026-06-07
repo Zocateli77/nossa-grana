@@ -1,5 +1,5 @@
 import { parseISO, isWithinInterval } from 'date-fns'
-import type { Categoria, Conta, Lancamento, Meta, Orcamento, Pessoa } from '@/types/db'
+import type { Categoria, Conta, Lancamento, Meta, Orcamento, Pessoa, Renda } from '@/types/db'
 import { mesRange, semanaRange, restanteDoMes, noMes, mesRefDe, navegarMes, iso } from './dates'
 import { startOfMonth, differenceInCalendarMonths } from 'date-fns'
 
@@ -10,19 +10,41 @@ export interface Dados {
   metas: Meta[]
   orcamentos: Orcamento[]
   lancamentos: Lancamento[]
+  rendas: Renda[]
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+// ------------------------------------------------------------------
+//  Renda prevista por mês (com herança recorrente — regra PJ)
+// ------------------------------------------------------------------
+export function rendaEfetiva(rendas: Renda[], mesRef: string, fallback = 0): number {
+  const exato = rendas.find((r) => r.mes_referencia === mesRef)
+  if (exato) return Number(exato.valor)
+  const anterior = rendas
+    .filter((r) => r.recorrente && r.mes_referencia <= mesRef)
+    .sort((a, b) => (a.mes_referencia < b.mes_referencia ? 1 : -1))[0]
+  return anterior ? Number(anterior.valor) : fallback
 }
 
 // ------------------------------------------------------------------
 //  helpers de orçamento (com herança de recorrentes — regra 5.6)
 // ------------------------------------------------------------------
-export function orcamentoEfetivo(orcamentos: Orcamento[], categoriaId: string, mesRef: string): number {
+/** linha de orçamento vigente (exata ou último recorrente anterior) */
+export function orcamentoRow(orcamentos: Orcamento[], categoriaId: string, mesRef: string): Orcamento | undefined {
   const exato = orcamentos.find((o) => o.categoria_id === categoriaId && o.mes_referencia === mesRef)
-  if (exato) return Number(exato.valor_estabelecido)
-  // herda o último recorrente anterior
-  const anteriores = orcamentos
+  if (exato) return exato
+  return orcamentos
     .filter((o) => o.categoria_id === categoriaId && o.recorrente && o.mes_referencia <= mesRef)
-    .sort((a, b) => (a.mes_referencia < b.mes_referencia ? 1 : -1))
-  return anteriores[0] ? Number(anteriores[0].valor_estabelecido) : 0
+    .sort((a, b) => (a.mes_referencia < b.mes_referencia ? 1 : -1))[0]
+}
+
+/** valor do envelope no mês. Se for percentual, calcula sobre a renda do mês. */
+export function orcamentoEfetivo(orcamentos: Orcamento[], categoriaId: string, mesRef: string, renda = 0): number {
+  const row = orcamentoRow(orcamentos, categoriaId, mesRef)
+  if (!row) return 0
+  if (row.tipo_valor === 'percentual') return round2(((Number(row.percentual) || 0) / 100) * renda)
+  return Number(row.valor_estabelecido)
 }
 
 export function lancsDoMes(lancamentos: Lancamento[], mesRef: string): Lancamento[] {
@@ -62,11 +84,12 @@ export interface EnvelopeInfo {
 
 export function envelope(
   categoria: Categoria,
-  dados: Pick<Dados, 'orcamentos' | 'lancamentos'>,
+  dados: Pick<Dados, 'orcamentos' | 'lancamentos' | 'rendas'>,
   mesRef: string,
   hoje: Date = new Date()
 ): EnvelopeInfo {
-  const estabelecido = orcamentoEfetivo(dados.orcamentos, categoria.id, mesRef)
+  const renda = rendaEfetiva(dados.rendas, mesRef)
+  const estabelecido = orcamentoEfetivo(dados.orcamentos, categoria.id, mesRef, renda)
   const gasto = gastoCategoriaMes(dados.lancamentos, categoria.id, mesRef)
   const resta = estabelecido - gasto
   const pct = estabelecido > 0 ? gasto / estabelecido : gasto > 0 ? 1.5 : 0
@@ -116,8 +139,9 @@ export interface ReservaInfo {
 }
 
 function reservaPorTipo(dados: Dados, tipoReserva: 'investimento' | 'imposto', tipoLanc: string, mesRef: string): ReservaInfo {
+  const renda = rendaEfetiva(dados.rendas, mesRef)
   const cats = dados.categorias.filter((c) => c.tipo_reserva === tipoReserva)
-  const planejado = cats.reduce((s, c) => s + orcamentoEfetivo(dados.orcamentos, c.id, mesRef), 0)
+  const planejado = cats.reduce((s, c) => s + orcamentoEfetivo(dados.orcamentos, c.id, mesRef, renda), 0)
   const executado = lancsDoMes(dados.lancamentos, mesRef)
     .filter((l) => l.tipo === tipoLanc)
     .reduce((s, l) => s + Number(l.valor), 0)
@@ -140,10 +164,11 @@ export interface MesadaInfo {
 }
 
 export function mesadas(dados: Dados, mesRef: string): MesadaInfo[] {
+  const renda = rendaEfetiva(dados.rendas, mesRef)
   return dados.categorias
     .filter((c) => c.tipo_reserva === 'mesada')
     .map((c) => {
-      const estabelecido = orcamentoEfetivo(dados.orcamentos, c.id, mesRef)
+      const estabelecido = orcamentoEfetivo(dados.orcamentos, c.id, mesRef, renda)
       const gasto = gastoCategoriaMes(dados.lancamentos, c.id, mesRef)
       return {
         categoria: c,
@@ -176,20 +201,21 @@ export interface ResumoMes {
   cascata: { nome: string; valor: number; tipo: 'entrada' | 'reserva' | 'gasto' | 'sobra' }[]
 }
 
-export function resumoMes(dados: Dados, mesRef: string, salarioBase: number): ResumoMes {
+export function resumoMes(dados: Dados, mesRef: string, rendaFallback = 0): ResumoMes {
   const noMesLancs = lancsDoMes(dados.lancamentos, mesRef)
   const receitaRealizada = noMesLancs.filter((l) => l.tipo === 'receita').reduce((s, l) => s + Number(l.valor), 0)
-  const renda = salarioBase + receitaRealizada
+  // Renda do mês = renda PREVISTA (não soma as receitas lançadas, p/ não duplicar)
+  const renda = rendaEfetiva(dados.rendas, mesRef, rendaFallback)
 
   const reservadoInvestimento = dados.categorias
     .filter((c) => c.tipo_reserva === 'investimento')
-    .reduce((s, c) => s + orcamentoEfetivo(dados.orcamentos, c.id, mesRef), 0)
+    .reduce((s, c) => s + orcamentoEfetivo(dados.orcamentos, c.id, mesRef, renda), 0)
   const reservadoImpostos = dados.categorias
     .filter((c) => c.tipo_reserva === 'imposto')
-    .reduce((s, c) => s + orcamentoEfetivo(dados.orcamentos, c.id, mesRef), 0)
+    .reduce((s, c) => s + orcamentoEfetivo(dados.orcamentos, c.id, mesRef, renda), 0)
   const orcadoGastosMesada = dados.categorias
     .filter((c) => c.tipo_reserva === 'gasto' || c.tipo_reserva === 'mesada')
-    .reduce((s, c) => s + orcamentoEfetivo(dados.orcamentos, c.id, mesRef), 0)
+    .reduce((s, c) => s + orcamentoEfetivo(dados.orcamentos, c.id, mesRef, renda), 0)
 
   const comprometido = reservadoInvestimento + reservadoImpostos + orcadoGastosMesada
   const disponivelLivre = renda - comprometido
@@ -223,13 +249,13 @@ export function ehParcelado(l: Lancamento): boolean {
   return l.parcela_total != null && l.parcela_total > 1
 }
 export function parcelasFaltam(l: Lancamento): number {
-  if (!ehParcelado(l)) return 0
+  if (!ehParcelado(l) || l.status === 'quitado') return 0
   return Math.max(0, (l.parcela_total ?? 0) - (l.parcela_atual ?? 1) + 1)
 }
 
 /** meses futuros (mesRef) em que ainda cairão parcelas, com valor. */
 export function cronogramaParcelas(l: Lancamento, aPartirDe?: string): { mesRef: string; numero: number; valor: number }[] {
-  if (!ehParcelado(l)) return []
+  if (!ehParcelado(l) || l.status === 'quitado') return []
   const baseMes = mesRefDe(l.data_primeira_parcela ?? l.data)
   const atual = l.parcela_atual ?? 1
   const total = l.parcela_total ?? 1
@@ -248,7 +274,7 @@ export function cronogramaParcelas(l: Lancamento, aPartirDe?: string): { mesRef:
 //  Recorrentes (5.6)
 // ------------------------------------------------------------------
 export function recorrentesBase(lancamentos: Lancamento[]): Lancamento[] {
-  return lancamentos.filter((l) => l.recorrente && !ehParcelado(l))
+  return lancamentos.filter((l) => l.recorrente && !ehParcelado(l) && l.status !== 'quitado')
 }
 
 // ------------------------------------------------------------------
@@ -297,7 +323,7 @@ export interface DividaInfo {
 
 export function dividas(lancamentos: Lancamento[]): DividaInfo[] {
   return lancamentos
-    .filter((l) => l.tipo === 'emprestimo' && ehParcelado(l))
+    .filter((l) => l.tipo === 'emprestimo' && ehParcelado(l) && l.status !== 'quitado')
     .map((l) => {
       const faltam = parcelasFaltam(l)
       const baseMes = mesRefDe(l.data_primeira_parcela ?? l.data)
@@ -322,7 +348,7 @@ export interface MesProjetado {
   parcelas: { descricao: string; valor: number; numero: number; total: number }[]
 }
 
-export function projecao(dados: Dados, salarioBase: number, mesesAdiante = 6, hoje: Date = new Date()): MesProjetado[] {
+export function projecao(dados: Dados, mesesAdiante = 6, hoje: Date = new Date(), rendaFallback = 0): MesProjetado[] {
   const baseMes = iso(startOfMonth(hoje))
   const recorr = recorrentesBase(dados.lancamentos)
   const out: MesProjetado[] = []
@@ -338,7 +364,7 @@ export function projecao(dados: Dados, salarioBase: number, mesesAdiante = 6, ho
     }
     const saidaRecorrente = recorr.reduce((s, l) => s + Number(l.valor), 0)
     const saidaParcelas = parcelas.reduce((s, p) => s + p.valor, 0)
-    const entradas = salarioBase
+    const entradas = rendaEfetiva(dados.rendas, mesRef, rendaFallback) // renda variável por mês
     const saidas = saidaRecorrente + saidaParcelas
     const saldoMes = entradas - saidas
     acumulado += saldoMes

@@ -59,9 +59,21 @@ create table if not exists orcamentos (
   categoria_id uuid references categorias(id) not null,
   mes_referencia date not null,          -- sempre o 1º dia do mês
   valor_estabelecido numeric(12,2) not null default 0,
+  tipo_valor text default 'fixo',        -- 'fixo' | 'percentual'
+  percentual numeric(5,2),               -- usado quando tipo_valor = 'percentual'
   recorrente boolean default true,
   observacao text,
   unique (categoria_id, mes_referencia)
+);
+
+-- 5b) Renda prevista por mês (renda variável PJ, com herança recorrente)
+create table if not exists rendas (
+  id uuid primary key default gen_random_uuid(),
+  mes_referencia date not null unique,
+  valor numeric(12,2) not null default 0,
+  recorrente boolean default true,
+  observacao text,
+  criado_em timestamptz default now()
 );
 
 -- 6) Lançamentos
@@ -81,6 +93,7 @@ create table if not exists lancamentos (
   data_primeira_parcela date,
   recorrente boolean default false,
   frequencia text default 'mensal',      -- 'mensal' | 'semanal' | 'anual'
+  status text default 'pago',            -- 'pago' | 'previsto' | 'quitado'
   pago boolean default true,
   privado boolean default false,
   observacao text,
@@ -150,7 +163,7 @@ create trigger trg_atualizado_em
 do $$
 declare t text;
 begin
-  foreach t in array array['pessoas','categorias','contas','metas','orcamentos','lancamentos'] loop
+  foreach t in array array['pessoas','categorias','contas','metas','orcamentos','lancamentos','rendas'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists casal_full_access on %I', t);
     execute format(

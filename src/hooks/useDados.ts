@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Categoria, Conta, Lancamento, Meta, Orcamento, Pessoa } from '@/types/db'
+import type { Categoria, Conta, Lancamento, Meta, Orcamento, Pessoa, Renda } from '@/types/db'
 import type { Dados } from '@/lib/calc'
 
 async function fetchAll<T>(table: string, order?: { col: string; asc?: boolean }): Promise<T[]> {
@@ -20,6 +20,8 @@ export const useOrcamentos = () =>
   useQuery({ queryKey: ['orcamentos'], queryFn: () => fetchAll<Orcamento>('orcamentos') })
 export const useLancamentos = () =>
   useQuery({ queryKey: ['lancamentos'], queryFn: () => fetchAll<Lancamento>('lancamentos', { col: 'data', asc: false }) })
+export const useRendas = () =>
+  useQuery({ queryKey: ['rendas'], queryFn: () => fetchAll<Renda>('rendas', { col: 'mes_referencia' }) })
 
 export interface UseDadosResult {
   dados: Dados
@@ -36,8 +38,9 @@ export function useDados(): UseDadosResult {
   const metas = useMetas()
   const orcamentos = useOrcamentos()
   const lancamentos = useLancamentos()
+  const rendas = useRendas()
 
-  const queries = [pessoas, categorias, contas, metas, orcamentos, lancamentos]
+  const queries = [pessoas, categorias, contas, metas, orcamentos, lancamentos, rendas]
 
   return {
     dados: {
@@ -47,6 +50,7 @@ export function useDados(): UseDadosResult {
       metas: metas.data ?? [],
       orcamentos: orcamentos.data ?? [],
       lancamentos: lancamentos.data ?? [],
+      rendas: rendas.data ?? [],
     },
     isLoading: queries.some((q) => q.isLoading),
     isError: queries.some((q) => q.isError),

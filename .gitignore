@@ -12,3 +12,6 @@ env.Supabase.txt
 .vite
 
 *.tsbuildinfo
+
+# Local Netlify folder
+.netlify

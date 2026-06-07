@@ -1,8 +1,9 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Plus, Trash2, ClipboardPaste, Check, Loader2 } from 'lucide-react'
+import { Plus, Trash2, ClipboardPaste, Check, Loader2, Maximize2, Minimize2, FilePlus2 } from 'lucide-react'
 import { useDados } from '@/hooks/useDados'
 import { useSalvarLancamentosEmMassa } from '@/hooks/useMutations'
+import { statusPadrao } from '@/lib/calc'
 import type { TipoLancamento } from '@/types/db'
 import { iso, parseISO, addMonths } from '@/lib/dates'
 import { Carregando } from '@/components/Estados'
@@ -17,13 +18,14 @@ interface Linha {
   contaId: string
   categoriaId: string
   donoId: string
+  metaId: string
   data: string
   parcela: string
   tipo: TipoLancamento
   obs: string
 }
 
-const linhaVazia = (data: string): Linha => ({ descricao: '', valor: '', contaId: '', categoriaId: '', donoId: '', data, parcela: '', tipo: 'despesa', obs: '' })
+const linhaVazia = (data: string): Linha => ({ descricao: '', valor: '', contaId: '', categoriaId: '', donoId: '', metaId: '', data, parcela: '', tipo: 'despesa', obs: '' })
 const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().trim()
 const parseValor = (s: string) => {
   const n = parseFloat(s.replace(/r\$/i, '').replace(/\s/g, '').replace(/\./g, '').replace(',', '.'))
@@ -37,6 +39,7 @@ export function MassaPage() {
   const hoje = iso(new Date())
   const [linhas, setLinhas] = useState<Linha[]>(() => Array.from({ length: 3 }, () => linhaVazia(hoje)))
   const [colar, setColar] = useState(false)
+  const [ampliado, setAmpliado] = useState(false)
   const [erro, setErro] = useState<string | null>(null)
 
   if (isLoading) return <Carregando />
@@ -65,6 +68,7 @@ export function MassaPage() {
         contaId: acharPorNome(dados.contas, conta ?? ''),
         categoriaId: acharPorNome(dados.categorias, cat ?? ''),
         donoId: acharPorNome(dados.pessoas, pessoa ?? ''),
+        metaId: '',
         data: data && /\d{4}-\d{2}-\d{2}/.test(data) ? data : hoje,
         parcela: parcela ?? '',
         tipo: (['despesa', 'investimento', 'imposto', 'emprestimo', 'receita'].includes(norm(tipo ?? '')) ? norm(tipo ?? '') : 'despesa') as TipoLancamento,
@@ -91,9 +95,11 @@ export function MassaPage() {
         conta_id: l.contaId || null,
         categoria_id: l.categoriaId || null,
         dono_id: l.donoId || null,
+        meta_id: l.tipo === 'investimento' && l.metaId ? l.metaId : null,
         parcela_atual: parcelaAtual,
         parcela_total: parcelaTotal,
         data_primeira_parcela: parcelaAtual ? iso(addMonths(parseISO(l.data), -(parcelaAtual - 1))) : null,
+        status: statusPadrao(l.data, l.tipo),
         pago: true,
         frequencia: 'mensal' as const,
         observacao: l.obs.trim() || null,
@@ -107,19 +113,13 @@ export function MassaPage() {
     }
   }
 
-  return (
-    <div>
-      <header className="flex items-center justify-between mb-3">
-        <h1 className="text-xl font-extrabold tracking-tight">Entrada em massa</h1>
-        <Button variant="outline" size="sm" onClick={() => setColar(true)}><ClipboardPaste className="h-4 w-4" /> Colar</Button>
-      </header>
-      <p className="text-sm text-muted-foreground mb-3">Adicione várias linhas e salve de uma vez. Conta/categoria/pessoa também aceitam o nome ao colar da planilha.</p>
-
+  const grade = (
+    <>
       <div className="overflow-x-auto rounded-2xl border">
-        <table className="w-full min-w-[820px] text-sm">
+        <table className="w-full min-w-[1040px] text-sm">
           <thead className="bg-muted/60 text-xs text-muted-foreground">
             <tr>
-              {['Descrição', 'Valor', 'Conta', 'Categoria', 'Pessoa', 'Data', 'Parc. X/Y', 'Tipo', 'Obs', ''].map((h) => (
+              {['Descrição', 'Valor', 'Conta', 'Categoria', 'Pessoa', 'Data', 'Parc. X/Y', 'Tipo', 'Meta', 'Obs', ''].map((h) => (
                 <th key={h} className="px-2 py-2 text-left font-medium whitespace-nowrap">{h}</th>
               ))}
             </tr>
@@ -138,6 +138,14 @@ export function MassaPage() {
                   <select className="h-9 rounded-lg border bg-card px-2 text-sm" value={l.tipo} onChange={(e) => set(i, 'tipo', e.target.value)}>
                     {['despesa', 'investimento', 'imposto', 'emprestimo', 'receita'].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
+                </td>
+                <td className="p-1">
+                  <SelectMini
+                    value={l.metaId}
+                    onChange={(v) => set(i, 'metaId', v)}
+                    opcoes={dados.metas}
+                    disabled={l.tipo !== 'investimento'}
+                  />
                 </td>
                 <td className="p-1"><Input className="h-9 min-w-[100px]" value={l.obs} onChange={(e) => set(i, 'obs', e.target.value)} /></td>
                 <td className="p-1">
@@ -159,15 +167,41 @@ export function MassaPage() {
       <Button className="w-full mt-4" size="lg" onClick={salvarTudo} disabled={salvar.isPending || validas.length === 0}>
         {salvar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Salvar {validas.length} lançamento{validas.length !== 1 ? 's' : ''}
       </Button>
+    </>
+  )
+
+  return (
+    <div>
+      <header className="flex items-center justify-between gap-2 mb-3">
+        <h1 className="text-xl font-extrabold tracking-tight">Entrada em massa</h1>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" onClick={() => navigate('/lancamentos/novo')}><FilePlus2 className="h-4 w-4" /> Única</Button>
+          <Button variant="outline" size="sm" onClick={() => setAmpliado(true)}><Maximize2 className="h-4 w-4" /> Ampliar</Button>
+          <Button variant="outline" size="sm" onClick={() => setColar(true)}><ClipboardPaste className="h-4 w-4" /> Colar</Button>
+        </div>
+      </header>
+      <p className="text-sm text-muted-foreground mb-3">Adicione várias linhas e salve de uma vez. Toque em <b>Ampliar</b> para ver a tabela inteira; conta/categoria/pessoa também aceitam o nome ao colar da planilha.</p>
+
+      {!ampliado && grade}
+
+      {ampliado && (
+        <div className="fixed inset-0 z-[60] bg-background overflow-auto">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-card px-4 py-3">
+            <h2 className="font-bold">Entrada em massa</h2>
+            <Button variant="outline" size="sm" onClick={() => setAmpliado(false)}><Minimize2 className="h-4 w-4" /> Reduzir</Button>
+          </div>
+          <div className="p-4">{grade}</div>
+        </div>
+      )}
 
       {colar && <ColarDialog onClose={() => setColar(false)} onImportar={importarColado} />}
     </div>
   )
 }
 
-function SelectMini({ value, onChange, opcoes }: { value: string; onChange: (v: string) => void; opcoes: { id: string; nome: string }[] }) {
+function SelectMini({ value, onChange, opcoes, disabled }: { value: string; onChange: (v: string) => void; opcoes: { id: string; nome: string }[]; disabled?: boolean }) {
   return (
-    <select className="h-9 rounded-lg border bg-card px-2 text-sm min-w-[120px]" value={value} onChange={(e) => onChange(e.target.value)}>
+    <select className="h-9 rounded-lg border bg-card px-2 text-sm min-w-[120px] disabled:opacity-40" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
       <option value="">—</option>
       {opcoes.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
     </select>
@@ -186,7 +220,7 @@ function ColarDialog({ onClose, onImportar }: { onClose: () => void; onImportar:
             className="w-full h-40 rounded-xl border bg-card p-3 text-sm font-mono"
             value={texto}
             onChange={(e) => setTexto(e.target.value)}
-            placeholder={'Mercado\t150,00\tNubank - Pessoa A\tMercado\tPessoa A\t2025-07-10'}
+            placeholder={'Mercado\t150,00\tNubank - Pessoa A\tMercado\tPessoa A\t2026-07-10'}
           />
           <Button className="w-full" onClick={() => onImportar(texto)} disabled={!texto.trim()}>Importar para a grade</Button>
         </div>

@@ -6,6 +6,7 @@ import { useSalvarLancamento } from '@/hooks/useMutations'
 import { useApp } from '@/contexts/AppContext'
 import type { TipoLancamento } from '@/types/db'
 import { iso, parseISO, addMonths, mesRefDe } from '@/lib/dates'
+import { statusPadrao } from '@/lib/calc'
 import { money } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -135,6 +136,7 @@ export function NovoLancamentoPage() {
         frequencia: 'mensal',
         privado: ehMesada,
         pago: true,
+        ...(editando ? {} : { status: statusPadrao(data, tipo) }),
         observacao: observacao.trim() || null,
       })
       if (contaId) localStorage.setItem(LS.conta, contaId)

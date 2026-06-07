@@ -1,6 +1,6 @@
 import { parseISO, isWithinInterval } from 'date-fns'
-import type { Categoria, Conta, Lancamento, Meta, Orcamento, Pessoa, Renda } from '@/types/db'
-import { mesRange, semanaRange, restanteDoMes, noMes, mesRefDe, navegarMes, iso } from './dates'
+import type { Categoria, Conta, Lancamento, Meta, Orcamento, Pessoa, Renda, StatusLancamento, TipoLancamento } from '@/types/db'
+import { mesRange, semanaRange, restanteDoMes, noMes, mesRefDe, navegarMes, iso, mesAtualRef } from './dates'
 import { startOfMonth, differenceInCalendarMonths } from 'date-fns'
 
 export interface Dados {
@@ -14,6 +14,17 @@ export interface Dados {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+
+/**
+ * Status padrão de um novo lançamento:
+ * - receita (entrada) sempre nasce 'previsto' (só é certa quando cai);
+ * - qualquer lançamento datado num mês futuro nasce 'previsto' (planejamento);
+ * - caso contrário 'pago'.
+ */
+export function statusPadrao(dataISO: string, tipo: TipoLancamento): StatusLancamento {
+  if (tipo === 'receita') return 'previsto'
+  return mesRefDe(dataISO) > mesAtualRef() ? 'previsto' : 'pago'
+}
 
 // ------------------------------------------------------------------
 //  Renda prevista por mês (com herança recorrente — regra PJ)

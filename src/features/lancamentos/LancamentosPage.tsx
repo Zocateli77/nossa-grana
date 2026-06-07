@@ -4,7 +4,7 @@ import { Search, SlidersHorizontal, MoreVertical, Pencil, Copy, Trash2, Lock, Re
 import { useDados } from '@/hooks/useDados'
 import { useApp } from '@/contexts/AppContext'
 import { useExcluirLancamento, useSalvarLancamento, useQuitarDivida } from '@/hooks/useMutations'
-import { byId, lancsDoMes, ehParcelado, parcelasFaltam } from '@/lib/calc'
+import { byId, lancsDoMes, ehParcelado, parcelasFaltam, statusPadrao } from '@/lib/calc'
 import { iso } from '@/lib/dates'
 import { money, dataCurta } from '@/lib/format'
 import type { Lancamento, StatusLancamento, TipoLancamento } from '@/types/db'
@@ -88,7 +88,8 @@ export function LancamentosPage() {
 
   async function duplicar(l: Lancamento) {
     const { id, criado_em, atualizado_em, ...resto } = l
-    await salvar.mutateAsync({ ...resto, data: iso(new Date()), descricao: l.descricao })
+    const hoje = iso(new Date())
+    await salvar.mutateAsync({ ...resto, data: hoje, status: statusPadrao(hoje, l.tipo), descricao: l.descricao })
     setAcao(null)
   }
 

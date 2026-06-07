@@ -7,6 +7,7 @@ import {
   TrendingUp,
   Settings,
   LayoutGrid,
+  HandCoins,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -26,6 +27,7 @@ export const navPrincipal: NavItem[] = [
 
 export const navSecundario: NavItem[] = [
   { to: '/contas', label: 'Contas & Cartões', icon: CreditCard },
+  { to: '/dividas', label: 'Dívidas', icon: HandCoins },
   { to: '/futuro', label: 'Futuro', icon: TrendingUp },
   { to: '/massa', label: 'Entrada em massa', icon: LayoutGrid },
   { to: '/config', label: 'Configurações', icon: Settings },

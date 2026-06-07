@@ -1,0 +1,209 @@
+import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+import { Search, SlidersHorizontal, MoreVertical, Pencil, Copy, Trash2, Lock, ReceiptText, Repeat } from 'lucide-react'
+import { useDados } from '@/hooks/useDados'
+import { useApp } from '@/contexts/AppContext'
+import { useExcluirLancamento, useSalvarLancamento } from '@/hooks/useMutations'
+import { byId, lancsDoMes } from '@/lib/calc'
+import { mesRefDe, iso } from '@/lib/dates'
+import { money, dataCurta } from '@/lib/format'
+import type { Lancamento, TipoLancamento } from '@/types/db'
+import { MonthSelector } from '@/components/layout/MonthSelector'
+import { CategoriaIcon } from '@/components/CategoriaIcon'
+import { Carregando, Vazio } from '@/components/Estados'
+import { Input } from '@/components/ui/input'
+import { Button } from '@/components/ui/button'
+import { Badge } from '@/components/ui/badge'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet'
+import { cn } from '@/lib/utils'
+
+const TIPO_FILTROS: { v: 'todos' | TipoLancamento; label: string }[] = [
+  { v: 'todos', label: 'Tudo' },
+  { v: 'despesa', label: 'Despesas' },
+  { v: 'investimento', label: 'Investim.' },
+  { v: 'imposto', label: 'Impostos' },
+  { v: 'emprestimo', label: 'Empréstimo' },
+  { v: 'receita', label: 'Receitas' },
+]
+
+export function LancamentosPage() {
+  const navigate = useNavigate()
+  const { mesRef } = useApp()
+  const { dados, isLoading } = useDados()
+  const excluir = useExcluirLancamento()
+  const salvar = useSalvarLancamento()
+
+  const [busca, setBusca] = useState('')
+  const [fTipo, setFTipo] = useState<'todos' | TipoLancamento>('todos')
+  const [fConta, setFConta] = useState('todas')
+  const [fCategoria, setFCategoria] = useState('todas')
+  const [fDono, setFDono] = useState('todos')
+  const [todosMeses, setTodosMeses] = useState(false)
+  const [mostrarFiltros, setMostrarFiltros] = useState(false)
+  const [acao, setAcao] = useState<Lancamento | null>(null)
+
+  const contasMap = useMemo(() => byId(dados.contas), [dados.contas])
+  const catMap = useMemo(() => byId(dados.categorias), [dados.categorias])
+  const pessoasMap = useMemo(() => byId(dados.pessoas), [dados.pessoas])
+
+  const lista = useMemo(() => {
+    let arr = todosMeses ? dados.lancamentos : lancsDoMes(dados.lancamentos, mesRef)
+    if (fTipo !== 'todos') arr = arr.filter((l) => l.tipo === fTipo)
+    if (fConta !== 'todas') arr = arr.filter((l) => l.conta_id === fConta)
+    if (fCategoria !== 'todas') arr = arr.filter((l) => l.categoria_id === fCategoria)
+    if (fDono !== 'todos') arr = arr.filter((l) => l.dono_id === fDono)
+    if (busca.trim()) {
+      const q = busca.toLowerCase()
+      arr = arr.filter((l) => l.descricao.toLowerCase().includes(q) || (l.observacao ?? '').toLowerCase().includes(q))
+    }
+    return [...arr].sort((a, b) => (a.data === b.data ? (a.criado_em < b.criado_em ? 1 : -1) : a.data < b.data ? 1 : -1))
+  }, [dados.lancamentos, mesRef, todosMeses, fTipo, fConta, fCategoria, fDono, busca])
+
+  const total = lista.reduce((s, l) => s + Number(l.valor), 0)
+
+  async function duplicar(l: Lancamento) {
+    const { id, criado_em, atualizado_em, ...resto } = l
+    await salvar.mutateAsync({ ...resto, data: iso(new Date()), descricao: l.descricao })
+    setAcao(null)
+  }
+
+  if (isLoading) return <Carregando />
+
+  return (
+    <div>
+      <header className="flex items-center justify-between mb-3">
+        <h1 className="text-xl font-extrabold tracking-tight">Extrato</h1>
+        {!todosMeses && <MonthSelector />}
+      </header>
+
+      <div className="flex gap-2 mb-3">
+        <div className="relative flex-1">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input value={busca} onChange={(e) => setBusca(e.target.value)} placeholder="Buscar…" className="pl-9" />
+        </div>
+        <Button variant="outline" size="icon" onClick={() => setMostrarFiltros((v) => !v)} className={cn(mostrarFiltros && 'border-primary text-primary')}>
+          <SlidersHorizontal className="h-4 w-4" />
+        </Button>
+      </div>
+
+      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-2">
+        {TIPO_FILTROS.map((t) => (
+          <button
+            key={t.v}
+            onClick={() => setFTipo(t.v)}
+            className={cn(
+              'rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap',
+              fTipo === t.v ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
+            )}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
+      {mostrarFiltros && (
+        <div className="grid grid-cols-2 gap-2 mb-3 rounded-2xl border p-3">
+          <Select value={fConta} onValueChange={setFConta}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas as contas</SelectItem>
+              {dados.contas.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={fCategoria} onValueChange={setFCategoria}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todas">Todas categorias</SelectItem>
+              {dados.categorias.map((c) => <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Select value={fDono} onValueChange={setFDono}>
+            <SelectTrigger><SelectValue /></SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todas pessoas</SelectItem>
+              {dados.pessoas.map((p) => <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          <Button variant={todosMeses ? 'default' : 'outline'} onClick={() => setTodosMeses((v) => !v)}>
+            {todosMeses ? 'Todos os meses' : 'Só este mês'}
+          </Button>
+        </div>
+      )}
+
+      <div className="flex items-center justify-between text-xs text-muted-foreground px-1 mb-2">
+        <span>{lista.length} lançamento{lista.length !== 1 ? 's' : ''}</span>
+        <span>Total: <b className="text-foreground">{money(total)}</b></span>
+      </div>
+
+      {lista.length === 0 ? (
+        <Vazio icon={ReceiptText} titulo="Nada por aqui" descricao="Nenhum lançamento com esses filtros." acao={<Button onClick={() => navigate('/lancamentos/novo')}>Lançar agora</Button>} />
+      ) : (
+        <div className="rounded-2xl border bg-card divide-y overflow-hidden">
+          {lista.map((l) => {
+            const cat = l.categoria_id ? catMap.get(l.categoria_id) : undefined
+            const conta = l.conta_id ? contasMap.get(l.conta_id) : undefined
+            const dono = l.dono_id ? pessoasMap.get(l.dono_id) : undefined
+            return (
+              <button key={l.id} onClick={() => setAcao(l)} className="flex w-full items-center gap-3 p-3 text-left hover:bg-accent/40 transition-colors">
+                <CategoriaIcon icone={cat?.icone} cor={cat?.cor} className="h-10 w-10" size={18} />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="font-medium truncate">{l.privado ? 'Gasto livre' : l.descricao}</span>
+                    {l.privado && <Lock className="h-3 w-3 text-muted-foreground shrink-0" />}
+                    {l.recorrente && <Repeat className="h-3 w-3 text-muted-foreground shrink-0" />}
+                  </div>
+                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <span>{dataCurta(l.data)}</span>
+                    {conta && <>· <span className="truncate">{conta.nome}</span></>}
+                    {dono && dono.nome !== 'Compartilhado' && <>· <span>{dono.nome}</span></>}
+                    {l.parcela_total && l.parcela_total > 1 && (
+                      <Badge variant="muted" className="ml-0.5">{l.parcela_atual}/{l.parcela_total}</Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right shrink-0">
+                  <span className={cn('font-semibold tabular-nums', l.tipo === 'receita' ? 'text-success' : l.tipo === 'investimento' ? 'text-primary' : '')}>
+                    {money(l.valor)}
+                  </span>
+                  <MoreVertical className="inline-block h-4 w-4 text-muted-foreground ml-1 align-middle" />
+                </div>
+              </button>
+            )
+          })}
+        </div>
+      )}
+
+      {/* Sheet de ações */}
+      <Sheet open={!!acao} onOpenChange={(o) => !o && setAcao(null)}>
+        <SheetContent side="bottom" className="rounded-t-3xl">
+          {acao && (
+            <>
+              <SheetHeader>
+                <SheetTitle>{acao.privado ? 'Gasto livre' : acao.descricao}</SheetTitle>
+              </SheetHeader>
+              <p className="text-sm text-muted-foreground mb-3">{money(acao.valor)} · {dataCurta(acao.data)}</p>
+              <div className="flex flex-col gap-1 pb-2">
+                <SheetClose asChild>
+                  <Button variant="ghost" className="justify-start gap-3" onClick={() => navigate(`/lancamentos/${acao.id}/editar`)}>
+                    <Pencil className="h-4 w-4" /> Editar
+                  </Button>
+                </SheetClose>
+                <Button variant="ghost" className="justify-start gap-3" onClick={() => duplicar(acao)}>
+                  <Copy className="h-4 w-4" /> Duplicar (hoje)
+                </Button>
+                <Button
+                  variant="ghost"
+                  className="justify-start gap-3 text-destructive hover:text-destructive"
+                  onClick={async () => { await excluir.mutateAsync(acao.id); setAcao(null) }}
+                >
+                  <Trash2 className="h-4 w-4" /> Excluir
+                </Button>
+              </div>
+            </>
+          )}
+        </SheetContent>
+      </Sheet>
+    </div>
+  )
+}

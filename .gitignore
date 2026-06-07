@@ -1,0 +1,14 @@
+node_modules
+dist
+dist-ssr
+*.local
+.env
+.env.*
+!.env.example
+env.Supabase.txt
+.claude
+.DS_Store
+*.log
+.vite
+
+*.tsbuildinfo

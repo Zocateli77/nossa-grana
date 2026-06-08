@@ -5,6 +5,7 @@ import { useApp } from '@/contexts/AppContext'
 import { useSalvarOrcamento, useSalvarCategoria, useSalvarRenda } from '@/hooks/useMutations'
 import { envelope, orcamentoRow, rendaEfetiva } from '@/lib/calc'
 import { AlocacaoRenda } from './AlocacaoRenda'
+import { DistribuicaoPercentual } from './DistribuicaoPercentual'
 import { money, pct, mesExtenso } from '@/lib/format'
 import type { Categoria } from '@/types/db'
 import { MonthSelector } from '@/components/layout/MonthSelector'
@@ -49,6 +50,7 @@ export function OrcamentosPage() {
       </header>
 
       <AlocacaoRenda dados={dados} mesRef={mesRef} renda={renda} onEditarRenda={() => setEditarRenda(true)} />
+      <DistribuicaoPercentual dados={dados} mesRef={mesRef} renda={renda} />
 
       <div className="flex justify-end mb-2">
         <Button variant="outline" size="sm" onClick={() => setNovaCat(true)}><Plus className="h-4 w-4" /> Nova categoria</Button>

@@ -73,6 +73,30 @@ export function useSalvarOrcamento() {
   })
 }
 
+export function useSalvarOrcamentosPercentuais() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (
+      rows: {
+        categoria_id: string
+        mes_referencia: string
+        valor_estabelecido: number
+        tipo_valor: 'percentual'
+        percentual: number
+        recorrente?: boolean
+      }[]
+    ) => {
+      const { data, error } = await supabase
+        .from('orcamentos')
+        .upsert(rows, { onConflict: 'categoria_id,mes_referencia' })
+        .select()
+      if (error) throw error
+      return data as Orcamento[]
+    },
+    onSuccess: () => invalidate(['orcamentos']),
+  })
+}
+
 export function useSalvarRenda() {
   const invalidate = useInvalidate()
   return useMutation({

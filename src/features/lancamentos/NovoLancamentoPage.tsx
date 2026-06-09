@@ -2,11 +2,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, Loader2, Check, Repeat, CreditCard } from 'lucide-react'
 import { useDados } from '@/hooks/useDados'
-import { useSalvarLancamento } from '@/hooks/useMutations'
+import { useSalvarLancamentosEmMassa, useEditarSerie, type EscopoSerie } from '@/hooks/useMutations'
 import { useApp } from '@/contexts/AppContext'
-import type { TipoLancamento } from '@/types/db'
+import type { NovoLancamento, TipoLancamento } from '@/types/db'
 import { iso, parseISO, addMonths, mesRefDe } from '@/lib/dates'
-import { statusPadrao } from '@/lib/calc'
+import { expandirSerie, type BaseSerie } from '@/lib/calc'
+import { EscopoSerieDialog } from '@/components/EscopoSerieDialog'
 import { money } from '@/lib/format'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -33,8 +34,10 @@ export function NovoLancamentoPage() {
   const { id } = useParams()
   const editando = Boolean(id)
   const { dados, isLoading } = useDados()
-  const salvar = useSalvarLancamento()
+  const salvarEmMassa = useSalvarLancamentosEmMassa()
+  const editarSerie = useEditarSerie()
   const { setMesRef } = useApp()
+  const [pedirEscopo, setPedirEscopo] = useState(false)
 
   const [tipo, setTipo] = useState<TipoLancamento>('despesa')
   const [valor, setValor] = useState(0)
@@ -106,50 +109,107 @@ export function NovoLancamentoPage() {
 
   const parcelaCalculada = modo === 'B' && parcelaTotal > 0 ? Math.round((valorTotal / parcelaTotal) * 100) / 100 : valor
 
+  const original = editando ? dados.lancamentos.find((x) => x.id === id) : undefined
+  const ehSerie = Boolean(original?.grupo_id)
+
   if (isLoading) return <Carregando />
+
+  function montarBase(): BaseSerie {
+    const valorFinal = parcelado && modo === 'B' ? parcelaCalculada : valor
+    const baseMes = parcelado ? iso(addMonths(parseISO(data), -(parcelaAtual - 1))) : null
+    return {
+      descricao: descricao.trim() || (ehMesada ? 'Gasto livre' : 'Lançamento'),
+      valor: valorFinal,
+      data,
+      tipo,
+      conta_id: contaId || null,
+      categoria_id: categoriaId || null,
+      dono_id: donoId || null,
+      meta_id: tipo === 'investimento' && metaId ? metaId : null,
+      parcela_atual: parcelado ? parcelaAtual : null,
+      parcela_total: parcelado ? parcelaTotal : null,
+      valor_total: parcelado ? (modo === 'B' ? valorTotal : Math.round(valorFinal * parcelaTotal * 100) / 100) : null,
+      data_primeira_parcela: baseMes,
+      recorrente,
+      frequencia: 'mensal',
+      privado: ehMesada,
+      observacao: observacao.trim() || null,
+    }
+  }
+
+  /** Campos editáveis aplicados numa edição. `incluirData` só faz sentido p/ "só esta". */
+  function patchEdicao(incluirData: boolean): Partial<NovoLancamento> {
+    const valorFinal = parcelado && modo === 'B' ? parcelaCalculada : valor
+    const p: Partial<NovoLancamento> = {
+      descricao: descricao.trim() || (ehMesada ? 'Gasto livre' : 'Lançamento'),
+      valor: valorFinal,
+      tipo,
+      conta_id: contaId || null,
+      categoria_id: categoriaId || null,
+      dono_id: donoId || null,
+      meta_id: tipo === 'investimento' && metaId ? metaId : null,
+      privado: ehMesada,
+      observacao: observacao.trim() || null,
+    }
+    if (incluirData) p.data = data
+    return p
+  }
+
+  function validar(): string | null {
+    const valorFinal = parcelado && modo === 'B' ? parcelaCalculada : valor
+    if (!valorFinal || valorFinal <= 0) return 'Informe um valor.'
+    if (!ehMesada && tipo !== 'receita' && !descricao.trim()) return 'Descreva o lançamento.'
+    if (tipo !== 'receita' && !categoriaId) return 'Escolha uma categoria.'
+    return null
+  }
+
+  function finalizar(eContinuar: boolean) {
+    if (contaId) localStorage.setItem(LS.conta, contaId)
+    if (categoriaId) localStorage.setItem(LS.categoria, categoriaId)
+    if (donoId) localStorage.setItem(LS.dono, donoId)
+    setMesRef(mesRefDe(data))
+    if (eContinuar) {
+      setValor(0); setDescricao(''); setValorTotal(0); setParcelado(false); setRecorrente(false); setObservacao('')
+      setErro(null)
+    } else {
+      navigate('/lancamentos')
+    }
+  }
 
   async function onSalvar(eContinuar = false) {
     setErro(null)
-    const valorFinal = parcelado && modo === 'B' ? parcelaCalculada : valor
-    if (!valorFinal || valorFinal <= 0) return setErro('Informe um valor.')
-    if (!ehMesada && tipo !== 'receita' && !descricao.trim()) return setErro('Descreva o lançamento.')
-    if (tipo !== 'receita' && !categoriaId) return setErro('Escolha uma categoria.')
+    const v = validar()
+    if (v) return setErro(v)
 
-    const baseMes = parcelado ? iso(addMonths(parseISO(data), -(parcelaAtual - 1))) : null
+    // Edição de um item que faz parte de uma série → pergunta o escopo antes
+    if (editando && ehSerie) {
+      setPedirEscopo(true)
+      return
+    }
+
     setSalvando(true)
     try {
-      await salvar.mutateAsync({
-        id: editando ? id : undefined,
-        descricao: descricao.trim() || (ehMesada ? 'Gasto livre' : 'Lançamento'),
-        valor: valorFinal,
-        data,
-        tipo,
-        conta_id: contaId || null,
-        categoria_id: categoriaId || null,
-        dono_id: donoId || null,
-        meta_id: tipo === 'investimento' && metaId ? metaId : null,
-        parcela_atual: parcelado ? parcelaAtual : null,
-        parcela_total: parcelado ? parcelaTotal : null,
-        valor_total: parcelado ? (modo === 'B' ? valorTotal : Math.round(valorFinal * parcelaTotal * 100) / 100) : null,
-        data_primeira_parcela: baseMes,
-        recorrente,
-        frequencia: 'mensal',
-        privado: ehMesada,
-        pago: true,
-        ...(editando ? {} : { status: statusPadrao(data, tipo) }),
-        observacao: observacao.trim() || null,
-      })
-      if (contaId) localStorage.setItem(LS.conta, contaId)
-      if (categoriaId) localStorage.setItem(LS.categoria, categoriaId)
-      if (donoId) localStorage.setItem(LS.dono, donoId)
-      setMesRef(mesRefDe(data))
-
-      if (eContinuar) {
-        setValor(0); setDescricao(''); setValorTotal(0); setParcelado(false); setObservacao('')
-        setErro(null)
+      if (editando && original) {
+        await editarSerie.mutateAsync({ lancamento: original, escopo: 'uma', patch: patchEdicao(true) })
       } else {
-        navigate('/lancamentos')
+        const rows = expandirSerie(montarBase(), crypto.randomUUID())
+        await salvarEmMassa.mutateAsync(rows)
       }
+      finalizar(eContinuar)
+    } catch (e: any) {
+      setErro(e?.message ?? 'Erro ao salvar.')
+    } finally {
+      setSalvando(false)
+    }
+  }
+
+  async function aplicarEscopo(escopo: EscopoSerie) {
+    if (!original) return
+    setPedirEscopo(false)
+    setSalvando(true)
+    try {
+      await editarSerie.mutateAsync({ lancamento: original, escopo, patch: patchEdicao(escopo === 'uma') })
+      finalizar(false)
     } catch (e: any) {
       setErro(e?.message ?? 'Erro ao salvar.')
     } finally {
@@ -326,6 +386,14 @@ export function NovoLancamentoPage() {
           )}
         </div>
       </div>
+
+      <EscopoSerieDialog
+        open={pedirEscopo}
+        onClose={() => setPedirEscopo(false)}
+        onEscolher={aplicarEscopo}
+        titulo="Editar lançamento da série"
+        descricao="Este lançamento se repete em outros meses. Onde aplicar as alterações?"
+      />
     </div>
   )
 }

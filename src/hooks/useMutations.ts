@@ -50,6 +50,81 @@ export function useSalvarLancamentosEmMassa() {
   })
 }
 
+export type EscopoSerie = 'uma' | 'futuras' | 'todas'
+
+/** Edita uma série de lançamentos no escopo escolhido (só esta / esta e futuras / todas). */
+export function useEditarSerie() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async ({
+      lancamento,
+      escopo,
+      patch,
+    }: {
+      lancamento: Lancamento
+      escopo: EscopoSerie
+      patch: Partial<NovoLancamento>
+    }) => {
+      if (escopo === 'uma' || !lancamento.grupo_id) {
+        const { error } = await supabase.from('lancamentos').update(patch).eq('id', lancamento.id)
+        if (error) throw error
+        return
+      }
+      let q = supabase.from('lancamentos').update(patch).eq('grupo_id', lancamento.grupo_id)
+      if (escopo === 'futuras') q = q.gte('data', lancamento.data)
+      const { error } = await q
+      if (error) throw error
+    },
+    onSuccess: () => invalidate(['lancamentos', 'metas']),
+  })
+}
+
+/** Exclui uma série de lançamentos no escopo escolhido. */
+export function useExcluirSerie() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async ({ lancamento, escopo }: { lancamento: Lancamento; escopo: EscopoSerie }) => {
+      if (escopo === 'uma' || !lancamento.grupo_id) {
+        const { error } = await supabase.from('lancamentos').delete().eq('id', lancamento.id)
+        if (error) throw error
+        return
+      }
+      if (escopo === 'todas') {
+        const { error } = await supabase.from('lancamentos').delete().eq('grupo_id', lancamento.grupo_id)
+        if (error) throw error
+        return
+      }
+      // futuras: apaga desta data em diante e desativa a recorrência nas anteriores
+      // (assim a janela rolante não recria os meses encerrados).
+      const del = await supabase
+        .from('lancamentos')
+        .delete()
+        .eq('grupo_id', lancamento.grupo_id)
+        .gte('data', lancamento.data)
+      if (del.error) throw del.error
+      const up = await supabase.from('lancamentos').update({ recorrente: false }).eq('grupo_id', lancamento.grupo_id)
+      if (up.error) throw up.error
+    },
+    onSuccess: () => invalidate(['lancamentos', 'metas']),
+  })
+}
+
+/** Insere as linhas que faltam para manter a janela rolante de recorrências (top-up). */
+export function useReabastecerRecorrencias() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (rows: Partial<NovoLancamento>[]) => {
+      if (rows.length === 0) return [] as Lancamento[]
+      const { data, error } = await supabase.from('lancamentos').insert(rows).select()
+      if (error) throw error
+      return data as Lancamento[]
+    },
+    onSuccess: (data) => {
+      if (data && data.length) invalidate(['lancamentos', 'metas'])
+    },
+  })
+}
+
 export function useSalvarOrcamento() {
   const invalidate = useInvalidate()
   return useMutation({
@@ -113,16 +188,40 @@ export function useSalvarRenda() {
   })
 }
 
-/** Quita/adianta uma dívida parcelada: marca 'quitado' e lança o pagamento do restante hoje. */
+/** Quita/adianta uma dívida parcelada: marca as parcelas em aberto como 'quitado' e lança o pagamento do restante hoje. */
 export function useQuitarDivida() {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: async (l: Lancamento) => {
-      const faltam = parcelasFaltam(l)
-      const restante = Math.round(faltam * Number(l.valor) * 100) / 100
-      // 1) marca o lançamento original como quitado
-      const up = await supabase.from('lancamentos').update({ status: 'quitado' }).eq('id', l.id)
-      if (up.error) throw up.error
+      let ids: string[]
+      let restante: number
+      let faltam: number
+      if (l.grupo_id) {
+        // parcelas-irmãs ainda em aberto, desta em diante (já materializadas no banco)
+        const { data, error } = await supabase
+          .from('lancamentos')
+          .select('id, valor')
+          .eq('grupo_id', l.grupo_id)
+          .neq('status', 'quitado')
+          .gte('data', l.data)
+        if (error) throw error
+        const rows = (data ?? []) as { id: string; valor: number }[]
+        ids = rows.map((r) => r.id)
+        restante = rows.reduce((s, r) => s + Number(r.valor), 0)
+        faltam = rows.length
+      } else {
+        // legado: linha única ainda não materializada
+        faltam = parcelasFaltam(l)
+        restante = faltam * Number(l.valor)
+        ids = [l.id]
+      }
+      restante = Math.round(restante * 100) / 100
+
+      // 1) marca as parcelas em aberto como quitado
+      if (ids.length) {
+        const up = await supabase.from('lancamentos').update({ status: 'quitado' }).in('id', ids)
+        if (up.error) throw up.error
+      }
       // 2) lança o pagamento do valor restante (se houver)
       if (restante > 0) {
         const ins = await supabase.from('lancamentos').insert({

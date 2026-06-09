@@ -4,7 +4,8 @@ import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useApp } from '@/contexts/AppContext'
 import { useLancamentos } from '@/hooks/useDados'
-import { mesesComDados } from '@/lib/calc'
+import { useReabastecerRecorrencias } from '@/hooks/useMutations'
+import { mesesComDados, seriesParaReabastecer } from '@/lib/calc'
 import { mesAtualRef } from '@/lib/dates'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
@@ -42,8 +43,22 @@ function useMesInicialAutomatico() {
   }, [isSuccess, data, mesRef, setMesRef])
 }
 
+/** Janela rolante: na 1ª carga, materializa os meses que faltam das recorrências (até +12). */
+function useReabastecimentoRolante() {
+  const { data, isSuccess } = useLancamentos()
+  const reabastecer = useReabastecerRecorrencias()
+  const jaRodou = useRef(false)
+  useEffect(() => {
+    if (!isSuccess || jaRodou.current || !data) return
+    jaRodou.current = true
+    const novas = seriesParaReabastecer({ lancamentos: data })
+    if (novas.length) reabastecer.mutate(novas)
+  }, [isSuccess, data])
+}
+
 function AppAutenticado() {
   useMesInicialAutomatico()
+  useReabastecimentoRolante()
   return (
     <AppShell>
       <Routes>

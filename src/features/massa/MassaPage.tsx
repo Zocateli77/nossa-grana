@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Plus, Trash2, ClipboardPaste, Check, Loader2, Maximize2, Minimize2, FilePlus2 } from 'lucide-react'
 import { useDados } from '@/hooks/useDados'
 import { useSalvarLancamentosEmMassa } from '@/hooks/useMutations'
-import { statusPadrao } from '@/lib/calc'
+import { expandirSerie, type BaseSerie } from '@/lib/calc'
 import type { TipoLancamento } from '@/types/db'
 import { iso, parseISO, addMonths } from '@/lib/dates'
 import { Carregando } from '@/components/Estados'
@@ -82,12 +82,13 @@ export function MassaPage() {
   async function salvarTudo() {
     setErro(null)
     if (validas.length === 0) return setErro('Preencha ao menos uma linha (descrição e valor).')
-    const payloads = validas.map((l) => {
+    // Cada linha vira uma série: parcelas (X/Y) são expandidas em meses consecutivos.
+    const payloads = validas.flatMap((l) => {
       const m = l.parcela.match(/(\d+)\s*\/\s*(\d+)/)
       const parcelaAtual = m ? +m[1] : null
       const parcelaTotal = m ? +m[2] : null
       const valor = parseValor(l.valor)
-      return {
+      const base: BaseSerie = {
         descricao: l.descricao.trim(),
         valor,
         data: l.data,
@@ -98,12 +99,14 @@ export function MassaPage() {
         meta_id: l.tipo === 'investimento' && l.metaId ? l.metaId : null,
         parcela_atual: parcelaAtual,
         parcela_total: parcelaTotal,
+        valor_total: null,
         data_primeira_parcela: parcelaAtual ? iso(addMonths(parseISO(l.data), -(parcelaAtual - 1))) : null,
-        status: statusPadrao(l.data, l.tipo),
-        pago: true,
-        frequencia: 'mensal' as const,
+        recorrente: false,
+        frequencia: 'mensal',
+        privado: false,
         observacao: l.obs.trim() || null,
       }
+      return expandirSerie(base, crypto.randomUUID())
     })
     try {
       await salvar.mutateAsync(payloads)

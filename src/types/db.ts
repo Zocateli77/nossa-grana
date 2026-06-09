@@ -90,6 +90,8 @@ export interface Lancamento {
   status: StatusLancamento
   pago: boolean
   privado: boolean
+  /** liga as ocorrências de uma mesma série (parcelas ou recorrência mensal) */
+  grupo_id: string | null
   observacao: string | null
   criado_em: string
   atualizado_em: string

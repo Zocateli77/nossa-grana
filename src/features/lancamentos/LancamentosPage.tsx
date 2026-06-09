@@ -3,13 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, SlidersHorizontal, MoreVertical, Pencil, Copy, Trash2, Lock, ReceiptText, Repeat, X, HandCoins, PencilLine } from 'lucide-react'
 import { useDados } from '@/hooks/useDados'
 import { useApp } from '@/contexts/AppContext'
-import { useExcluirLancamento, useSalvarLancamento, useQuitarDivida } from '@/hooks/useMutations'
+import { useExcluirSerie, useSalvarLancamento, useQuitarDivida, type EscopoSerie } from '@/hooks/useMutations'
 import { byId, lancsDoMes, ehParcelado, parcelasFaltam, statusPadrao } from '@/lib/calc'
 import { iso } from '@/lib/dates'
 import { money, dataCurta } from '@/lib/format'
 import type { Lancamento, StatusLancamento, TipoLancamento } from '@/types/db'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
+import { EscopoSerieDialog } from '@/components/EscopoSerieDialog'
 import { Carregando, Vazio } from '@/components/Estados'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -38,7 +39,7 @@ export function LancamentosPage() {
   const [searchParams, setSearchParams] = useSearchParams()
   const { mesRef } = useApp()
   const { dados, isLoading } = useDados()
-  const excluir = useExcluirLancamento()
+  const excluir = useExcluirSerie()
   const salvar = useSalvarLancamento()
   const quitar = useQuitarDivida()
 
@@ -51,6 +52,7 @@ export function LancamentosPage() {
   const [mostrarFiltros, setMostrarFiltros] = useState(false)
   const [modoEdicao, setModoEdicao] = useState(false)
   const [acao, setAcao] = useState<Lancamento | null>(null)
+  const [excluirSerieAlvo, setExcluirSerieAlvo] = useState<Lancamento | null>(null)
 
   // categoria vinda da URL (ao clicar num envelope)
   useEffect(() => {
@@ -89,13 +91,41 @@ export function LancamentosPage() {
   async function duplicar(l: Lancamento) {
     const { id, criado_em, atualizado_em, ...resto } = l
     const hoje = iso(new Date())
-    await salvar.mutateAsync({ ...resto, data: hoje, status: statusPadrao(hoje, l.tipo), descricao: l.descricao })
+    // duplicata é um lançamento avulso — não herda a série nem o parcelamento
+    await salvar.mutateAsync({
+      ...resto,
+      data: hoje,
+      status: statusPadrao(hoje, l.tipo),
+      descricao: l.descricao,
+      grupo_id: null,
+      recorrente: false,
+      parcela_atual: null,
+      parcela_total: null,
+      valor_total: null,
+      data_primeira_parcela: null,
+    })
     setAcao(null)
   }
 
   async function fazerQuitar(l: Lancamento) {
     await quitar.mutateAsync(l)
     setAcao(null)
+  }
+
+  async function fazerExcluir(l: Lancamento) {
+    if (l.grupo_id) {
+      setAcao(null)
+      setExcluirSerieAlvo(l)
+      return
+    }
+    await excluir.mutateAsync({ lancamento: l, escopo: 'uma' })
+    setAcao(null)
+  }
+
+  async function aplicarExclusao(escopo: EscopoSerie) {
+    if (!excluirSerieAlvo) return
+    await excluir.mutateAsync({ lancamento: excluirSerieAlvo, escopo })
+    setExcluirSerieAlvo(null)
   }
 
   if (isLoading) return <Carregando />
@@ -289,15 +319,24 @@ export function LancamentosPage() {
                 <Button
                   variant="ghost"
                   className="justify-start gap-3 text-destructive hover:text-destructive"
-                  onClick={async () => { await excluir.mutateAsync(acao.id); setAcao(null) }}
+                  onClick={() => fazerExcluir(acao)}
                 >
-                  <Trash2 className="h-4 w-4" /> Excluir
+                  <Trash2 className="h-4 w-4" /> {acao.grupo_id ? 'Excluir…' : 'Excluir'}
                 </Button>
               </div>
             </>
           )}
         </SheetContent>
       </Sheet>
+
+      <EscopoSerieDialog
+        open={!!excluirSerieAlvo}
+        onClose={() => setExcluirSerieAlvo(null)}
+        onEscolher={aplicarExclusao}
+        titulo="Excluir lançamento da série"
+        descricao="Este lançamento se repete em outros meses. O que você quer excluir?"
+        destrutivo
+      />
     </div>
   )
 }

@@ -96,15 +96,20 @@ create table if not exists lancamentos (
   status text default 'pago',            -- 'pago' | 'previsto' | 'quitado'
   pago boolean default true,
   privado boolean default false,
+  grupo_id uuid,                         -- liga as ocorrências de uma mesma série (parcelas / recorrência)
   observacao text,
   criado_em timestamptz default now(),
   atualizado_em timestamptz default now()
 );
 
+-- coluna de agrupamento de séries (idempotente p/ bancos já existentes)
+alter table lancamentos add column if not exists grupo_id uuid;
+
 create index if not exists idx_lanc_data on lancamentos (data);
 create index if not exists idx_lanc_categoria on lancamentos (categoria_id);
 create index if not exists idx_lanc_conta on lancamentos (conta_id);
 create index if not exists idx_lanc_meta on lancamentos (meta_id);
+create index if not exists idx_lanc_grupo on lancamentos (grupo_id);
 
 -- ---------------------------------------------------------------------
 --  Trigger: recalcula metas.valor_atual a partir dos aportes (5.7)

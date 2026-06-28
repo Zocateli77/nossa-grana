@@ -45,7 +45,7 @@ export function LancamentosPage() {
 
   const [busca, setBusca] = useState('')
   const [fTipo, setFTipo] = useState<'todos' | TipoLancamento>('todos')
-  const [fConta, setFConta] = useState('todas')
+  const [fConta, setFConta] = useState(searchParams.get('conta') ?? 'todas')
   const [fCategoria, setFCategoria] = useState(searchParams.get('categoria') ?? 'todas')
   const [fDono, setFDono] = useState('todos')
   const [todosMeses, setTodosMeses] = useState(false)
@@ -58,6 +58,8 @@ export function LancamentosPage() {
   useEffect(() => {
     const cat = searchParams.get('categoria')
     if (cat) setFCategoria(cat)
+    const conta = searchParams.get('conta')
+    if (conta) setFConta(conta)
   }, [searchParams])
 
   const contasMap = useMemo(() => byId(dados.contas), [dados.contas])
@@ -79,11 +81,20 @@ export function LancamentosPage() {
 
   const total = lista.reduce((s, l) => s + Number(l.valor), 0)
   const categoriaFiltrada = fCategoria !== 'todas' ? catMap.get(fCategoria) : undefined
+  const contaFiltrada = fConta !== 'todas' ? contasMap.get(fConta) : undefined
 
   function limparCategoria() {
     setFCategoria('todas')
     if (searchParams.get('categoria')) {
       searchParams.delete('categoria')
+      setSearchParams(searchParams, { replace: true })
+    }
+  }
+
+  function limparConta() {
+    setFConta('todas')
+    if (searchParams.get('conta')) {
+      searchParams.delete('conta')
       setSearchParams(searchParams, { replace: true })
     }
   }
@@ -200,14 +211,22 @@ export function LancamentosPage() {
         </div>
       )}
 
-      {/* chip de categoria ativa (vindo do envelope) */}
-      {categoriaFiltrada && (
+      {/* chips de filtros ativos vindos de outros paineis */}
+      {(categoriaFiltrada || contaFiltrada) && (
         <div className="mb-3 flex items-center gap-2">
-          <span className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-sm font-medium">
-            <CategoriaIcon icone={categoriaFiltrada.icone} cor={categoriaFiltrada.cor} className="h-5 w-5" size={12} />
-            {categoriaFiltrada.nome}
-            <button onClick={limparCategoria} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
-          </span>
+          {categoriaFiltrada && (
+            <span className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-sm font-medium">
+              <CategoriaIcon icone={categoriaFiltrada.icone} cor={categoriaFiltrada.cor} className="h-5 w-5" size={12} />
+              {categoriaFiltrada.nome}
+              <button onClick={limparCategoria} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+            </span>
+          )}
+          {contaFiltrada && (
+            <span className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-sm font-medium">
+              {contaFiltrada.nome}
+              <button onClick={limparConta} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+            </span>
+          )}
         </div>
       )}
 

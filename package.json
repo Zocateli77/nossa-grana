@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "test:analytics": "node scripts/analise-mensal.test.mjs",
     "preview": "vite preview",
     "setup": "node scripts/setup.mjs"
   },

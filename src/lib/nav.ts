@@ -8,6 +8,7 @@ import {
   Settings,
   LayoutGrid,
   HandCoins,
+  BarChart3,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -26,6 +27,7 @@ export const navPrincipal: NavItem[] = [
 ]
 
 export const navSecundario: NavItem[] = [
+  { to: '/analises', label: 'Análises', icon: BarChart3 },
   { to: '/contas', label: 'Contas & Cartões', icon: CreditCard },
   { to: '/dividas', label: 'Dívidas', icon: HandCoins },
   { to: '/futuro', label: 'Futuro', icon: TrendingUp },

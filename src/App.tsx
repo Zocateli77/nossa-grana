@@ -10,6 +10,7 @@ import { mesAtualRef } from '@/lib/dates'
 import { AppShell } from '@/components/layout/AppShell'
 import { LoginPage } from '@/features/auth/LoginPage'
 import { DashboardPage } from '@/features/dashboard/DashboardPage'
+import { AnalisesPage } from '@/features/analises/AnalisesPage'
 import { LancamentosPage } from '@/features/lancamentos/LancamentosPage'
 import { NovoLancamentoPage } from '@/features/lancamentos/NovoLancamentoPage'
 import { MassaPage } from '@/features/massa/MassaPage'
@@ -63,6 +64,7 @@ function AppAutenticado() {
     <AppShell>
       <Routes>
         <Route path="/" element={<DashboardPage />} />
+        <Route path="/analises" element={<AnalisesPage />} />
         <Route path="/lancamentos" element={<LancamentosPage />} />
         <Route path="/lancamentos/novo" element={<NovoLancamentoPage />} />
         <Route path="/lancamentos/:id/editar" element={<NovoLancamentoPage />} />

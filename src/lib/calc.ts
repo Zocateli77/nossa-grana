@@ -1,4 +1,4 @@
-import { parseISO, isWithinInterval, startOfMonth, differenceInCalendarMonths, getDaysInMonth } from 'date-fns'
+import { parseISO, isWithinInterval, startOfMonth, differenceInCalendarMonths, getDaysInMonth, addDays } from 'date-fns'
 import type { Categoria, Conta, Frequencia, Lancamento, Meta, NovoLancamento, Orcamento, Pessoa, Renda, StatusLancamento, TipoLancamento } from '@/types/db'
 import { mesRange, semanaRange, restanteDoMes, noMes, mesRefDe, navegarMes, iso, mesAtualRef, addMonths } from './dates'
 
@@ -310,6 +310,50 @@ export interface GastoCategoria {
   pct: number
 }
 
+export interface GastoConta {
+  conta: Conta | null
+  nome: string
+  total: number
+  pct: number
+  pago: number
+  previsto: number
+  quantidade: number
+}
+
+export interface GastoDia {
+  data: string
+  total: number
+  acumulado: number
+}
+
+export interface InsightFinanceiro {
+  id: string
+  titulo: string
+  descricao: string
+  valor?: number
+  severidade: 'info' | 'warning' | 'danger' | 'success'
+  href?: string
+}
+
+export interface AnaliseMensal {
+  mesRef: string
+  renda: number
+  gastoTotal: number
+  gastoPago: number
+  gastoPrevisto: number
+  saidasTotais: number
+  saldo: number
+  pctRenda: number
+  mediaDia: number
+  semCategoriaTotal: number
+  aClassificarTotal: number
+  porCategoria: GastoCategoria[]
+  porConta: GastoConta[]
+  serieDiaria: GastoDia[]
+  maiores: Lancamento[]
+  insights: InsightFinanceiro[]
+}
+
 /** Gasto (despesas) por categoria no mês, ordenado do maior p/ o menor. */
 export function gastosPorCategoria(dados: Dados, mesRef: string): GastoCategoria[] {
   const desp = lancsDoMes(dados.lancamentos, mesRef).filter((l) => l.tipo === 'despesa' && l.status !== 'quitado')
@@ -334,6 +378,203 @@ export function maioresGastos(lancamentos: Lancamento[], mesRef: string, n = 5):
     .filter((l) => l.tipo === 'despesa' && l.status !== 'quitado')
     .sort((a, b) => Number(b.valor) - Number(a.valor))
     .slice(0, n)
+}
+
+function despesasAnaliticas(lancamentos: Lancamento[], mesRef: string): Lancamento[] {
+  return lancsDoMes(lancamentos, mesRef).filter((l) => l.tipo === 'despesa' && l.status !== 'quitado')
+}
+
+function ehAClassificar(categoria: Categoria | undefined): boolean {
+  return (categoria?.nome ?? '').toLocaleLowerCase('pt-BR').includes('classificar')
+}
+
+function gastosPorCategoriaAnalise(dados: Dados, despesas: Lancamento[], totalGasto: number): GastoCategoria[] {
+  const porCat = new Map<string, number>()
+  for (const l of despesas) {
+    if (!l.categoria_id) continue
+    porCat.set(l.categoria_id, (porCat.get(l.categoria_id) ?? 0) + Number(l.valor))
+  }
+  const out: GastoCategoria[] = []
+  for (const [catId, val] of porCat) {
+    const categoria = dados.categorias.find((c) => c.id === catId)
+    if (!categoria) continue
+    out.push({ categoria, total: round2(val), pct: totalGasto > 0 ? val / totalGasto : 0 })
+  }
+  return out.sort((a, b) => b.total - a.total)
+}
+
+function gastosPorContaAnalise(dados: Dados, despesas: Lancamento[], totalGasto: number): GastoConta[] {
+  const grupos = new Map<string, { conta: Conta | null; nome: string; total: number; pago: number; previsto: number; quantidade: number }>()
+  for (const l of despesas) {
+    const conta = l.conta_id ? dados.contas.find((c) => c.id === l.conta_id) ?? null : null
+    const key = conta?.id ?? '__sem_conta__'
+    const atual = grupos.get(key) ?? { conta, nome: conta?.nome ?? 'Sem conta', total: 0, pago: 0, previsto: 0, quantidade: 0 }
+    const valor = Number(l.valor)
+    atual.total += valor
+    if (l.status === 'previsto') atual.previsto += valor
+    else atual.pago += valor
+    atual.quantidade += 1
+    grupos.set(key, atual)
+  }
+  return [...grupos.values()]
+    .map((g) => ({
+      ...g,
+      total: round2(g.total),
+      pago: round2(g.pago),
+      previsto: round2(g.previsto),
+      pct: totalGasto > 0 ? g.total / totalGasto : 0,
+    }))
+    .sort((a, b) => b.total - a.total)
+}
+
+function serieDiariaGastos(despesas: Lancamento[], mesRef: string): GastoDia[] {
+  const porDia = new Map<string, number>()
+  for (const l of despesas) porDia.set(l.data, (porDia.get(l.data) ?? 0) + Number(l.valor))
+
+  const inicio = parseISO(mesRef)
+  const dias = getDaysInMonth(inicio)
+  let acumulado = 0
+  const out: GastoDia[] = []
+  for (let i = 0; i < dias; i++) {
+    const data = iso(addDays(inicio, i))
+    const total = round2(porDia.get(data) ?? 0)
+    acumulado = round2(acumulado + total)
+    out.push({ data, total, acumulado })
+  }
+  return out
+}
+
+export function analiseMensal(dados: Dados, mesRef: string, rendaFallback = 0, hoje: Date = new Date()): AnaliseMensal {
+  const despesas = despesasAnaliticas(dados.lancamentos, mesRef)
+  const soma = (arr: Lancamento[]) => round2(arr.reduce((s, l) => s + Number(l.valor), 0))
+  const gastoTotal = soma(despesas)
+  const gastoPago = soma(despesas.filter((l) => l.status === 'pago'))
+  const gastoPrevisto = soma(despesas.filter((l) => l.status === 'previsto'))
+  const outrosLancs = lancsDoMes(dados.lancamentos, mesRef).filter((l) => l.tipo !== 'receita' && l.tipo !== 'despesa' && l.status !== 'quitado')
+  const saidasTotais = round2(gastoTotal + soma(outrosLancs))
+  const renda = rendaEfetiva(dados.rendas, mesRef, rendaFallback)
+  const saldo = round2(renda - saidasTotais)
+  const { refEhMesCorrente } = restanteDoMes(mesRef, hoje)
+  const totalDias = getDaysInMonth(parseISO(mesRef))
+  const diasDecorridos = refEhMesCorrente ? Math.max(1, hoje.getDate()) : totalDias
+  const catMap = byId(dados.categorias)
+  const semCategoriaTotal = soma(despesas.filter((l) => !l.categoria_id))
+  const aClassificarTotal = soma(despesas.filter((l) => ehAClassificar(l.categoria_id ? catMap.get(l.categoria_id) : undefined)))
+  const porCategoria = gastosPorCategoriaAnalise(dados, despesas, gastoTotal)
+  const porConta = gastosPorContaAnalise(dados, despesas, gastoTotal)
+  const maiores = [...despesas].sort((a, b) => Number(b.valor) - Number(a.valor)).slice(0, 6)
+
+  const insights: InsightFinanceiro[] = []
+  const topCategoria = porCategoria[0]
+  if (topCategoria) {
+    insights.push({
+      id: `categoria-pesada-${topCategoria.categoria.id}`,
+      titulo: 'Categoria que mais pesou',
+      descricao: `${topCategoria.categoria.nome} representa ${Math.round(topCategoria.pct * 100)}% das despesas do mes.`,
+      valor: topCategoria.total,
+      severidade: topCategoria.pct >= 0.4 ? 'warning' : 'info',
+      href: `/lancamentos?categoria=${topCategoria.categoria.id}`,
+    })
+  }
+
+  const topConta = porConta[0]
+  if (topConta) {
+    insights.push({
+      id: `conta-pesada-${topConta.conta?.id ?? 'sem-conta'}`,
+      titulo: 'Conta/cartao mais usado',
+      descricao: `${topConta.nome} concentrou ${Math.round(topConta.pct * 100)}% dos gastos do mes.`,
+      valor: topConta.total,
+      severidade: topConta.pct >= 0.5 ? 'warning' : 'info',
+      href: topConta.conta ? `/lancamentos?conta=${topConta.conta.id}` : '/lancamentos',
+    })
+  }
+
+  const estourada = porCategoria
+    .map((g) => {
+      const estabelecido = orcamentoEfetivo(dados.orcamentos, g.categoria.id, mesRef, renda)
+      return { ...g, estabelecido, excesso: g.total - estabelecido }
+    })
+    .filter((g) => g.estabelecido > 0 && g.excesso > 0)
+    .sort((a, b) => b.excesso - a.excesso)[0]
+  if (estourada) {
+    insights.push({
+      id: `categoria-estourada-${estourada.categoria.id}`,
+      titulo: 'Orcamento estourado',
+      descricao: `${estourada.categoria.nome} passou ${moneyLike(estourada.excesso)} do planejado.`,
+      valor: round2(estourada.excesso),
+      severidade: 'danger',
+      href: `/lancamentos?categoria=${estourada.categoria.id}`,
+    })
+  }
+
+  if (semCategoriaTotal > 0 || aClassificarTotal > 0) {
+    const totalRevisao = round2(semCategoriaTotal + aClassificarTotal)
+    insights.push({
+      id: 'revisar-classificacao',
+      titulo: 'Gastos para revisar',
+      descricao: `${moneyLike(totalRevisao)} estao sem categoria ou em A classificar.`,
+      valor: totalRevisao,
+      severidade: 'warning',
+      href: '/lancamentos',
+    })
+  }
+
+  if (gastoPrevisto > 0) {
+    insights.push({
+      id: 'previstos-restantes',
+      titulo: 'Ainda vai cair',
+      descricao: `${moneyLike(gastoPrevisto)} ja esta previsto para este mes.`,
+      valor: gastoPrevisto,
+      severidade: 'info',
+      href: '/lancamentos',
+    })
+  }
+
+  const maior = maiores[0]
+  if (maior) {
+    insights.push({
+      id: `maior-gasto-${maior.id}`,
+      titulo: 'Maior lancamento',
+      descricao: maior.privado ? 'Gasto livre foi o maior lancamento do mes.' : `${maior.descricao} foi o maior lancamento do mes.`,
+      valor: Number(maior.valor),
+      severidade: 'info',
+      href: '/lancamentos',
+    })
+  }
+
+  if (saldo < 0) {
+    insights.unshift({
+      id: 'saldo-negativo',
+      titulo: 'Mes no vermelho',
+      descricao: `As saidas superam a renda em ${moneyLike(Math.abs(saldo))}.`,
+      valor: Math.abs(saldo),
+      severidade: 'danger',
+      href: '/lancamentos',
+    })
+  }
+
+  return {
+    mesRef,
+    renda,
+    gastoTotal,
+    gastoPago,
+    gastoPrevisto,
+    saidasTotais,
+    saldo,
+    pctRenda: renda > 0 ? gastoTotal / renda : 0,
+    mediaDia: round2(gastoPago / diasDecorridos),
+    semCategoriaTotal,
+    aClassificarTotal,
+    porCategoria,
+    porConta,
+    serieDiaria: serieDiariaGastos(despesas, mesRef),
+    maiores,
+    insights,
+  }
+}
+
+function moneyLike(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 }
 
 // ------------------------------------------------------------------

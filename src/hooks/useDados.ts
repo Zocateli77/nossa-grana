@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Categoria, Conta, Lancamento, Meta, Orcamento, Pessoa, Renda } from '@/types/db'
+import type { Categoria, Conta, Desejo, Lancamento, Meta, Orcamento, Pessoa, Renda } from '@/types/db'
 import type { Dados } from '@/lib/calc'
 
 async function fetchAll<T>(table: string, order?: { col: string; asc?: boolean }): Promise<T[]> {
@@ -16,6 +16,7 @@ export const useCategorias = () =>
   useQuery({ queryKey: ['categorias'], queryFn: () => fetchAll<Categoria>('categorias', { col: 'nome' }) })
 export const useContas = () => useQuery({ queryKey: ['contas'], queryFn: () => fetchAll<Conta>('contas', { col: 'nome' }) })
 export const useMetas = () => useQuery({ queryKey: ['metas'], queryFn: () => fetchAll<Meta>('metas', { col: 'criado_em' }) })
+export const useDesejos = () => useQuery({ queryKey: ['desejos'], queryFn: () => fetchAll<Desejo>('desejos', { col: 'criado_em', asc: false }) })
 export const useOrcamentos = () =>
   useQuery({ queryKey: ['orcamentos'], queryFn: () => fetchAll<Orcamento>('orcamentos') })
 export const useLancamentos = () =>
@@ -36,11 +37,12 @@ export function useDados(): UseDadosResult {
   const categorias = useCategorias()
   const contas = useContas()
   const metas = useMetas()
+  const desejos = useDesejos()
   const orcamentos = useOrcamentos()
   const lancamentos = useLancamentos()
   const rendas = useRendas()
 
-  const queries = [pessoas, categorias, contas, metas, orcamentos, lancamentos, rendas]
+  const queries = [pessoas, categorias, contas, metas, desejos, orcamentos, lancamentos, rendas]
 
   return {
     dados: {
@@ -48,6 +50,7 @@ export function useDados(): UseDadosResult {
       categorias: categorias.data ?? [],
       contas: contas.data ?? [],
       metas: metas.data ?? [],
+      desejos: desejos.data ?? [],
       orcamentos: orcamentos.data ?? [],
       lancamentos: lancamentos.data ?? [],
       rendas: rendas.data ?? [],

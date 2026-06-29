@@ -64,7 +64,7 @@ async function main() {
 
   // ---------- limpa dados (idempotente) ----------
   await client.query(
-    'truncate lancamentos, orcamentos, metas, categorias, contas, pessoas restart identity cascade'
+    'truncate desejos, lancamentos, orcamentos, metas, categorias, contas, pessoas restart identity cascade'
   )
 
   // ---------- pessoas ----------

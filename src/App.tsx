@@ -19,6 +19,7 @@ import { MetasPage } from '@/features/metas/MetasPage'
 import { MetaDetalhePage } from '@/features/metas/MetaDetalhePage'
 import { FuturoPage } from '@/features/futuro/FuturoPage'
 import { DividasPage } from '@/features/dividas/DividasPage'
+import { DesejosPage } from '@/features/desejos/DesejosPage'
 import { ConfigPage } from '@/features/config/ConfigPage'
 
 function TelaCarregando() {
@@ -74,6 +75,7 @@ function AppAutenticado() {
         <Route path="/metas/:id" element={<MetaDetalhePage />} />
         <Route path="/futuro" element={<FuturoPage />} />
         <Route path="/dividas" element={<DividasPage />} />
+        <Route path="/desejos" element={<DesejosPage />} />
         <Route path="/config" element={<ConfigPage />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>

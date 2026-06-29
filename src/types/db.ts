@@ -4,6 +4,8 @@ export type TipoConta = 'cartao_credito' | 'conta' | 'dinheiro' | 'emprestimo'
 export type Frequencia = 'mensal' | 'semanal' | 'anual'
 export type StatusLancamento = 'pago' | 'previsto' | 'quitado'
 export type TipoValorOrcamento = 'fixo' | 'percentual'
+export type StatusDesejo = 'desejo' | 'avaliando' | 'planejado' | 'pronto' | 'comprado' | 'arquivado'
+export type PrioridadeDesejo = 'baixa' | 'media' | 'alta'
 
 export interface Pessoa {
   id: string
@@ -98,3 +100,23 @@ export interface Lancamento {
 }
 
 export type NovoLancamento = Omit<Lancamento, 'id' | 'criado_em' | 'atualizado_em'>
+
+export interface Desejo {
+  id: string
+  nome: string
+  descricao: string | null
+  status: StatusDesejo
+  valor_total: number
+  parcela_total: number
+  mes_inicio: string | null
+  categoria_id: string | null
+  conta_id: string | null
+  dono_id: string | null
+  prioridade: PrioridadeDesejo
+  lancamento_grupo_id: string | null
+  comprado_em: string | null
+  criado_em: string
+  atualizado_em: string
+}
+
+export type NovoDesejo = Omit<Desejo, 'id' | 'criado_em' | 'atualizado_em'>

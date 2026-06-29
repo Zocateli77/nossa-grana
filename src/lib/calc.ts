@@ -1,5 +1,5 @@
 import { parseISO, isWithinInterval, startOfMonth, differenceInCalendarMonths, getDaysInMonth } from 'date-fns'
-import type { Categoria, Conta, Frequencia, Lancamento, Meta, NovoLancamento, Orcamento, Pessoa, Renda, StatusLancamento, TipoLancamento } from '@/types/db'
+import type { Categoria, Conta, Desejo, Frequencia, Lancamento, Meta, NovoLancamento, Orcamento, Pessoa, Renda, StatusLancamento, TipoLancamento } from '@/types/db'
 import { mesRange, semanaRange, restanteDoMes, noMes, mesRefDe, navegarMes, iso, mesAtualRef, addMonths } from './dates'
 
 /** Horizonte rolante das recorrências: quantos meses à frente manter materializados. */
@@ -10,6 +10,7 @@ export interface Dados {
   categorias: Categoria[]
   contas: Conta[]
   metas: Meta[]
+  desejos: Desejo[]
   orcamentos: Orcamento[]
   lancamentos: Lancamento[]
   rendas: Renda[]
@@ -302,6 +303,136 @@ export function resumoReal(dados: Dados, mesRef: string, rendaFallback = 0, hoje
     diasRestantes,
     mediaDia: round2(jaPago / diasDecorridos),
   }
+}
+
+export interface ViabilidadeDesejo {
+  estado: 'verde' | 'vermelho' | 'neutro'
+  motivo: string
+  custoMensal: number
+  sobraMes: number
+  restaEnvelope: number
+  estouroMes: number
+  estouroEnvelope: number
+}
+
+export interface ResumoDesejos {
+  totalMensalSimulado: number
+  prontos: number
+  bloqueados: number
+}
+
+function custoMensalDesejo(desejo: Pick<Desejo, 'valor_total' | 'parcela_total'>): number {
+  const parcelas = Math.max(1, Number(desejo.parcela_total) || 1)
+  return round2(Number(desejo.valor_total) / parcelas)
+}
+
+function gastoDespesaCategoriaMes(lancamentos: Lancamento[], categoriaId: string, mesRef: string): number {
+  return round2(
+    lancsDoMes(lancamentos, mesRef)
+      .filter((l) => l.tipo === 'despesa' && l.status !== 'quitado' && l.categoria_id === categoriaId)
+      .reduce((s, l) => s + Number(l.valor), 0)
+  )
+}
+
+export function viabilidadeDesejo(desejo: Desejo, dados: Dados, rendaFallback = 0): ViabilidadeDesejo {
+  const custoMensal = custoMensalDesejo(desejo)
+  const incompleto = custoMensal <= 0 || !desejo.mes_inicio || !desejo.categoria_id
+  if (incompleto) {
+    return {
+      estado: 'neutro',
+      motivo: 'Informe valor, categoria e mes para simular.',
+      custoMensal,
+      sobraMes: 0,
+      restaEnvelope: 0,
+      estouroMes: 0,
+      estouroEnvelope: 0,
+    }
+  }
+
+  const mesRef = desejo.mes_inicio as string
+  const categoriaId = desejo.categoria_id as string
+  const categoria = dados.categorias.find((c) => c.id === categoriaId)
+  if (!categoria) {
+    return {
+      estado: 'neutro',
+      motivo: 'Categoria nao encontrada.',
+      custoMensal,
+      sobraMes: 0,
+      restaEnvelope: 0,
+      estouroMes: 0,
+      estouroEnvelope: 0,
+    }
+  }
+
+  const real = resumoReal(dados, mesRef, rendaFallback)
+  const renda = rendaEfetiva(dados.rendas, mesRef, rendaFallback)
+  const estabelecido = orcamentoEfetivo(dados.orcamentos, categoria.id, mesRef, renda)
+  const gastoCategoria = gastoDespesaCategoriaMes(dados.lancamentos, categoria.id, mesRef)
+  const sobraMes = round2(real.saldoReal)
+  const restaEnvelope = round2(estabelecido - gastoCategoria)
+
+  if (estabelecido <= 0) {
+    return {
+      estado: 'vermelho',
+      motivo: `${categoria.nome} nao tem envelope para este mes.`,
+      custoMensal,
+      sobraMes,
+      restaEnvelope,
+      estouroMes: Math.max(0, round2(custoMensal - sobraMes)),
+      estouroEnvelope: custoMensal,
+    }
+  }
+
+  const estouroEnvelope = Math.max(0, round2(custoMensal - restaEnvelope))
+  const estouroMes = Math.max(0, round2(custoMensal - sobraMes))
+
+  if (estouroEnvelope > 0) {
+    return {
+      estado: 'vermelho',
+      motivo: `Estoura ${categoria.nome} em ${moneyLike(estouroEnvelope)}.`,
+      custoMensal,
+      sobraMes,
+      restaEnvelope,
+      estouroMes,
+      estouroEnvelope,
+    }
+  }
+
+  if (estouroMes > 0) {
+    return {
+      estado: 'vermelho',
+      motivo: `Estoura a sobra do mes em ${moneyLike(estouroMes)}.`,
+      custoMensal,
+      sobraMes,
+      restaEnvelope,
+      estouroMes,
+      estouroEnvelope,
+    }
+  }
+
+  return {
+    estado: 'verde',
+    motivo: 'Cabe na sobra do mes e no envelope.',
+    custoMensal,
+    sobraMes,
+    restaEnvelope,
+    estouroMes: 0,
+    estouroEnvelope: 0,
+  }
+}
+
+export function resumoDesejos(desejos: Desejo[], dados: Dados, rendaFallback = 0): ResumoDesejos {
+  const ativos = desejos.filter((d) => d.status !== 'comprado' && d.status !== 'arquivado')
+  const vis = ativos.map((d) => viabilidadeDesejo(d, dados, rendaFallback))
+  return {
+    totalMensalSimulado: round2(vis.filter((v) => v.estado !== 'neutro').reduce((s, v) => s + v.custoMensal, 0)),
+    prontos: vis.filter((v) => v.estado === 'verde').length,
+    bloqueados: vis.filter((v) => v.estado === 'vermelho').length,
+  }
+}
+
+function moneyLike(value: number): string {
+  return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value)
 }
 
 export interface GastoCategoria {

@@ -111,6 +111,31 @@ create index if not exists idx_lanc_conta on lancamentos (conta_id);
 create index if not exists idx_lanc_meta on lancamentos (meta_id);
 create index if not exists idx_lanc_grupo on lancamentos (grupo_id);
 
+-- 7) Desejos / compras planejadas antes de virarem lancamentos reais
+create table if not exists desejos (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  descricao text,
+  status text not null default 'desejo'
+    check (status in ('desejo','avaliando','planejado','pronto','comprado','arquivado')),
+  valor_total numeric(12,2) not null default 0,
+  parcela_total int not null default 1 check (parcela_total >= 1),
+  mes_inicio date,
+  categoria_id uuid references categorias(id),
+  conta_id uuid references contas(id),
+  dono_id uuid references pessoas(id),
+  prioridade text not null default 'media' check (prioridade in ('baixa','media','alta')),
+  lancamento_grupo_id uuid,
+  comprado_em timestamptz,
+  criado_em timestamptz default now(),
+  atualizado_em timestamptz default now()
+);
+
+create index if not exists idx_desejos_status on desejos (status);
+create index if not exists idx_desejos_mes_inicio on desejos (mes_inicio);
+create index if not exists idx_desejos_categoria on desejos (categoria_id);
+create index if not exists idx_desejos_conta on desejos (conta_id);
+
 -- ---------------------------------------------------------------------
 --  Trigger: recalcula metas.valor_atual a partir dos aportes (5.7)
 -- ---------------------------------------------------------------------
@@ -162,13 +187,18 @@ create trigger trg_atualizado_em
   before update on lancamentos
   for each row execute function set_atualizado_em();
 
+drop trigger if exists trg_atualizado_em_desejos on desejos;
+create trigger trg_atualizado_em_desejos
+  before update on desejos
+  for each row execute function set_atualizado_em();
+
 -- ---------------------------------------------------------------------
 --  RLS — app doméstico do casal: usuário autenticado acessa tudo
 -- ---------------------------------------------------------------------
 do $$
 declare t text;
 begin
-  foreach t in array array['pessoas','categorias','contas','metas','orcamentos','lancamentos','rendas'] loop
+  foreach t in array array['pessoas','categorias','contas','metas','orcamentos','lancamentos','rendas','desejos'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists casal_full_access on %I', t);
     execute format(

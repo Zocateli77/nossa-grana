@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Categoria, Lancamento, Meta, NovoLancamento, Orcamento, Renda, TipoValorOrcamento } from '@/types/db'
-import { parcelasFaltam } from '@/lib/calc'
+import type { Categoria, Desejo, Lancamento, Meta, NovoDesejo, NovoLancamento, Orcamento, Renda, TipoValorOrcamento } from '@/types/db'
+import { expandirSerie, parcelasFaltam, type BaseSerie } from '@/lib/calc'
 import { iso } from '@/lib/dates'
 
 function useInvalidate() {
@@ -24,6 +24,100 @@ export function useSalvarLancamento() {
       return data
     },
     onSuccess: () => invalidate(['lancamentos', 'metas']),
+  })
+}
+
+export function useSalvarDesejo() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (input: Partial<NovoDesejo> & { id?: string }) => {
+      const { id, ...payload } = input
+      if (id) {
+        const { data, error } = await supabase.from('desejos').update(payload).eq('id', id).select().single()
+        if (error) throw error
+        return data as Desejo
+      }
+      const { data, error } = await supabase.from('desejos').insert(payload).select().single()
+      if (error) throw error
+      return data as Desejo
+    },
+    onSuccess: () => invalidate(['desejos']),
+  })
+}
+
+export function useExcluirDesejo() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('desejos').delete().eq('id', id)
+      if (error) throw error
+    },
+    onSuccess: () => invalidate(['desejos']),
+  })
+}
+
+export interface ConfirmarCompraDesejoInput {
+  desejo: Desejo
+  data: string
+  conta_id: string | null
+  categoria_id: string | null
+  dono_id: string | null
+  valor_total: number
+  parcela_total: number
+  observacao: string | null
+}
+
+const round2 = (n: number) => Math.round(n * 100) / 100
+
+export function useConfirmarCompraDesejo() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (input: ConfirmarCompraDesejoInput) => {
+      const parcelas = Math.max(1, Number(input.parcela_total) || 1)
+      const valorParcela = round2(Number(input.valor_total) / parcelas)
+      const grupoId = crypto.randomUUID()
+      const base: BaseSerie = {
+        descricao: input.desejo.nome.trim(),
+        valor: valorParcela,
+        data: input.data,
+        tipo: 'despesa',
+        conta_id: input.conta_id,
+        categoria_id: input.categoria_id,
+        dono_id: input.dono_id,
+        meta_id: null,
+        parcela_atual: parcelas > 1 ? 1 : null,
+        parcela_total: parcelas > 1 ? parcelas : null,
+        valor_total: parcelas > 1 ? round2(Number(input.valor_total)) : null,
+        data_primeira_parcela: parcelas > 1 ? input.data : null,
+        recorrente: false,
+        frequencia: 'mensal',
+        privado: false,
+        observacao: input.observacao,
+      }
+      const rows = expandirSerie(base, grupoId)
+      const ins = await supabase.from('lancamentos').insert(rows).select()
+      if (ins.error) throw ins.error
+
+      const upd = await supabase
+        .from('desejos')
+        .update({
+          status: 'comprado',
+          comprado_em: new Date().toISOString(),
+          lancamento_grupo_id: parcelas > 1 ? grupoId : null,
+        })
+        .eq('id', input.desejo.id)
+        .select()
+        .single()
+
+      if (upd.error) {
+        const ids = ((ins.data ?? []) as Lancamento[]).map((l) => l.id)
+        if (ids.length) await supabase.from('lancamentos').delete().in('id', ids)
+        throw upd.error
+      }
+
+      return { desejo: upd.data as Desejo, lancamentos: (ins.data ?? []) as Lancamento[] }
+    },
+    onSuccess: () => invalidate(['desejos', 'lancamentos', 'metas']),
   })
 }
 

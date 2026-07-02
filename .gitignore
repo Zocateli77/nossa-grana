@@ -15,3 +15,5 @@ env.Supabase.txt
 
 # Local Netlify folder
 .netlify
+
+.vercel

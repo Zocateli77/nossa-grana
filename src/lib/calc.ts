@@ -786,6 +786,108 @@ export function projecao(dados: Dados, mesesAdiante = 6, hoje: Date = new Date()
 }
 
 // ------------------------------------------------------------------
+//  Dashboard analítico — gasto vs investimento
+// ------------------------------------------------------------------
+export interface EstouroEnvelope {
+  categoria: Categoria
+  estourouValor: number
+}
+
+export interface AnaliseGastoInvestimento {
+  renda: number
+  impostosReservados: number
+  aportePlanejado: number
+  gastosOrcado: number
+  gastoRealTotal: number
+  investidoReal: number
+  tetoGastoSemAfetarInvest: number
+  podeGastarAinda: number
+  sobraParaInvestir: number
+  aportePossivel: number
+  aporteEmRisco: number
+  estouroEnvelopes: EstouroEnvelope[]
+  estouroTotal: number
+  estado: 'ok' | 'alerta' | 'risco'
+}
+
+export function analiseGastoInvestimento(dados: Dados, mesRef: string, rendaFallback = 0): AnaliseGastoInvestimento {
+  const resumo = resumoMes(dados, mesRef, rendaFallback)
+  const real = resumoReal(dados, mesRef, rendaFallback)
+
+  const renda = resumo.renda
+  const impostosReservados = resumo.reservadoImpostos
+  const aportePlanejado = resumo.reservadoInvestimento
+  const gastosOrcado = resumo.orcadoGastosMesada
+  const gastoRealTotal = real.totalGasto
+  const investidoReal = real.investido
+
+  const tetoGastoSemAfetarInvest = round2(renda - impostosReservados - aportePlanejado)
+  const podeGastarAinda = round2(tetoGastoSemAfetarInvest - gastoRealTotal)
+  const sobraParaInvestir = round2(renda - impostosReservados - gastoRealTotal)
+  const aportePossivel = round2(Math.min(aportePlanejado, Math.max(0, sobraParaInvestir)))
+  const aporteEmRisco = round2(Math.max(0, -podeGastarAinda))
+
+  const envsGasto = envelopesDoMes(dados, mesRef).filter((e) => e.estourou)
+  const envsMesada = mesadas(dados, mesRef)
+    .filter((m) => m.estabelecido > 0 && m.gasto > m.estabelecido)
+    .map((m) => ({
+      categoria: m.categoria,
+      estourouValor: round2(m.gasto - m.estabelecido),
+    }))
+
+  const estouroEnvelopes: EstouroEnvelope[] = [
+    ...envsGasto.map((e) => ({ categoria: e.categoria, estourouValor: e.estourouValor })),
+    ...envsMesada,
+  ].sort((a, b) => b.estourouValor - a.estourouValor)
+
+  const estouroTotal = round2(estouroEnvelopes.reduce((s, e) => s + e.estourouValor, 0))
+
+  let estado: AnaliseGastoInvestimento['estado'] = 'ok'
+  if (aporteEmRisco > 0) estado = 'risco'
+  else if (tetoGastoSemAfetarInvest > 0 && podeGastarAinda / tetoGastoSemAfetarInvest < 0.2) estado = 'alerta'
+
+  return {
+    renda,
+    impostosReservados,
+    aportePlanejado,
+    gastosOrcado,
+    gastoRealTotal,
+    investidoReal,
+    tetoGastoSemAfetarInvest,
+    podeGastarAinda,
+    sobraParaInvestir,
+    aportePossivel,
+    aporteEmRisco,
+    estouroEnvelopes,
+    estouroTotal,
+    estado,
+  }
+}
+
+export interface SerieMensalItem {
+  mesRef: string
+  renda: number
+  gasto: number
+  investido: number
+}
+
+/** Últimos N meses até mesRef (mais antigo → atual). */
+export function serieMensal(dados: Dados, mesRef: string, n = 6, rendaFallback = 0): SerieMensalItem[] {
+  const out: SerieMensalItem[] = []
+  for (let i = n - 1; i >= 0; i--) {
+    const m = navegarMes(mesRef, -i)
+    const real = resumoReal(dados, m, rendaFallback)
+    out.push({
+      mesRef: m,
+      renda: real.entradas,
+      gasto: real.totalGasto,
+      investido: real.investido,
+    })
+  }
+  return out
+}
+
+// ------------------------------------------------------------------
 //  helpers de lookup
 // ------------------------------------------------------------------
 export const byId = <T extends { id: string }>(arr: T[]) => {

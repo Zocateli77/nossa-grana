@@ -10,6 +10,7 @@ import { Carregando, Vazio, SecaoTitulo } from '@/components/Estados'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 
 function totalDevido(l: Lancamento): number {
   if (ehParcelado(l)) return parcelasFaltam(l) * Number(l.valor)
@@ -26,6 +27,7 @@ export function DividasPage() {
   const quitar = useQuitarDivida()
   const contasMap = useMemo(() => byId(dados.contas), [dados.contas])
   const [quitando, setQuitando] = useState<string | null>(null)
+  const [confirmarQuitar, setConfirmarQuitar] = useState<Lancamento | null>(null)
 
   const catsDivida = useMemo(
     () => new Set(dados.categorias.filter((c) => c.grupo === 'divida').map((c) => c.id)),
@@ -34,7 +36,6 @@ export function DividasPage() {
 
   if (isLoading) return <Carregando />
 
-  // inclui o que é tipo 'emprestimo' OU está numa categoria do grupo "dívida"
   const emprestimos = dados.lancamentos.filter(
     (l) => l.tipo === 'emprestimo' || (l.categoria_id != null && catsDivida.has(l.categoria_id))
   )
@@ -47,6 +48,7 @@ export function DividasPage() {
     setQuitando(l.id)
     try {
       await quitar.mutateAsync(l)
+      setConfirmarQuitar(null)
     } finally {
       setQuitando(null)
     }
@@ -56,7 +58,7 @@ export function DividasPage() {
     return (
       <div>
         <h1 className="text-xl font-extrabold tracking-tight mb-3">Dívidas</h1>
-        <Vazio icon={HandCoins} titulo="Sem dívidas 🎉" descricao="Lançamentos do tipo 'empréstimo' aparecem aqui, de qualquer conta." />
+        <Vazio icon={HandCoins} titulo="Sem dívidas" descricao="Lançamentos do tipo 'empréstimo' aparecem aqui, de qualquer conta." />
       </div>
     )
   }
@@ -98,9 +100,9 @@ export function DividasPage() {
               <Button
                 variant="outline"
                 size="sm"
-                className="mt-3 w-full text-primary"
+                className="mt-3 w-full min-h-11 text-primary"
                 disabled={quitando === l.id}
-                onClick={() => fazerQuitar(l)}
+                onClick={() => setConfirmarQuitar(l)}
               >
                 {quitando === l.id ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
                 Quitar/Adiantar · paga {money(totalDevido(l))}
@@ -115,7 +117,7 @@ export function DividasPage() {
           <SecaoTitulo>Quitadas</SecaoTitulo>
           <Card className="divide-y overflow-hidden">
             {quitados.map((l) => (
-              <div key={l.id} className="flex items-center gap-3 p-3 opacity-70">
+              <div key={l.id} className="flex items-center gap-3 p-3 text-muted-foreground">
                 <CheckCircle2 className="h-5 w-5 text-success shrink-0" />
                 <span className="flex-1 truncate text-sm line-through">{l.descricao}</span>
                 <Badge variant="success">quitada</Badge>
@@ -124,6 +126,36 @@ export function DividasPage() {
           </Card>
         </>
       )}
+
+      <Dialog open={!!confirmarQuitar} onOpenChange={(o) => !o && setConfirmarQuitar(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Quitar dívida?</DialogTitle>
+            <DialogDescription>
+              {confirmarQuitar && (
+                <>
+                  Você vai quitar &quot;{confirmarQuitar.descricao}&quot; pagando {money(totalDevido(confirmarQuitar))} de uma vez.
+                  Esta ação não pode ser desfeita.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setConfirmarQuitar(null)}>
+              Cancelar
+            </Button>
+            <Button
+              className="w-full sm:w-auto"
+              disabled={!!quitando}
+              onClick={() => confirmarQuitar && fazerQuitar(confirmarQuitar)}
+            >
+              {quitando && <Loader2 className="h-4 w-4 animate-spin" />}
+              Confirmar quitação
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <div className="h-4" />
     </div>
   )

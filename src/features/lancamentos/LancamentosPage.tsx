@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetClose } from '@/components/ui/sheet'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 const TIPO_FILTROS: { v: 'todos' | TipoLancamento; label: string }[] = [
@@ -53,6 +54,7 @@ export function LancamentosPage() {
   const [modoEdicao, setModoEdicao] = useState(false)
   const [acao, setAcao] = useState<Lancamento | null>(null)
   const [excluirSerieAlvo, setExcluirSerieAlvo] = useState<Lancamento | null>(null)
+  const [confirmarExclusao, setConfirmarExclusao] = useState<Lancamento | null>(null)
 
   // categoria vinda da URL (ao clicar num envelope)
   useEffect(() => {
@@ -118,8 +120,14 @@ export function LancamentosPage() {
       setExcluirSerieAlvo(l)
       return
     }
-    await excluir.mutateAsync({ lancamento: l, escopo: 'uma' })
     setAcao(null)
+    setConfirmarExclusao(l)
+  }
+
+  async function confirmarExclusaoAvulsa() {
+    if (!confirmarExclusao) return
+    await excluir.mutateAsync({ lancamento: confirmarExclusao, escopo: 'uma' })
+    setConfirmarExclusao(null)
   }
 
   async function aplicarExclusao(escopo: EscopoSerie) {
@@ -146,12 +154,18 @@ export function LancamentosPage() {
           variant="outline"
           size="icon"
           onClick={() => setModoEdicao((v) => !v)}
-          className={cn(modoEdicao && 'border-primary text-primary bg-primary/10')}
-          title="Modo edição"
+          className={cn('h-11 w-11', modoEdicao && 'border-primary text-primary bg-primary/10')}
+          aria-label="Modo edição"
         >
           <PencilLine className="h-4 w-4" />
         </Button>
-        <Button variant="outline" size="icon" onClick={() => setMostrarFiltros((v) => !v)} className={cn(mostrarFiltros && 'border-primary text-primary')}>
+        <Button
+          variant="outline"
+          size="icon"
+          className={cn('h-11 w-11', mostrarFiltros && 'border-primary text-primary')}
+          onClick={() => setMostrarFiltros((v) => !v)}
+          aria-label="Filtros"
+        >
           <SlidersHorizontal className="h-4 w-4" />
         </Button>
       </div>
@@ -162,7 +176,7 @@ export function LancamentosPage() {
             key={t.v}
             onClick={() => setFTipo(t.v)}
             className={cn(
-              'rounded-full px-3 py-1.5 text-xs font-medium whitespace-nowrap',
+              'rounded-full px-3 py-2.5 min-h-11 text-xs font-medium whitespace-nowrap',
               fTipo === t.v ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
             )}
           >
@@ -206,7 +220,13 @@ export function LancamentosPage() {
           <span className="inline-flex items-center gap-2 rounded-full bg-secondary px-3 py-1.5 text-sm font-medium">
             <CategoriaIcon icone={categoriaFiltrada.icone} cor={categoriaFiltrada.cor} className="h-5 w-5" size={12} />
             {categoriaFiltrada.nome}
-            <button onClick={limparCategoria} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+            <button
+              onClick={limparCategoria}
+              className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-foreground"
+              aria-label="Remover filtro de categoria"
+            >
+              <X className="h-4 w-4" />
+            </button>
           </span>
         </div>
       )}
@@ -233,7 +253,7 @@ export function LancamentosPage() {
                     <p className="font-medium truncate text-sm">{l.privado ? 'Gasto livre' : l.descricao}</p>
                     <div className="mt-1.5 flex flex-wrap gap-1.5">
                       <select
-                        className="h-8 rounded-lg border bg-card px-2 text-xs max-w-[150px]"
+                        className="h-11 rounded-lg border bg-card px-2 text-xs max-w-[150px]"
                         value={l.categoria_id ?? ''}
                         onChange={(e) => salvar.mutate({ id: l.id, categoria_id: e.target.value || null })}
                       >
@@ -241,7 +261,7 @@ export function LancamentosPage() {
                         {dados.categorias.map((c) => <option key={c.id} value={c.id}>{c.nome}</option>)}
                       </select>
                       <select
-                        className="h-8 rounded-lg border bg-card px-2 text-xs"
+                        className="h-11 rounded-lg border bg-card px-2 text-xs"
                         value={l.status ?? 'pago'}
                         onChange={(e) => salvar.mutate({ id: l.id, status: e.target.value as StatusLancamento })}
                       >
@@ -337,6 +357,34 @@ export function LancamentosPage() {
         descricao="Este lançamento se repete em outros meses. O que você quer excluir?"
         destrutivo
       />
+
+      <Dialog open={!!confirmarExclusao} onOpenChange={(o) => !o && setConfirmarExclusao(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Excluir lançamento?</DialogTitle>
+            <DialogDescription>
+              {confirmarExclusao && (
+                <>
+                  &quot;{confirmarExclusao.privado ? 'Gasto livre' : confirmarExclusao.descricao}&quot; ({money(confirmarExclusao.valor)}) será removido permanentemente.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setConfirmarExclusao(null)}>
+              Cancelar
+            </Button>
+            <Button
+              variant="destructive"
+              className="w-full sm:w-auto"
+              disabled={excluir.isPending}
+              onClick={confirmarExclusaoAvulsa}
+            >
+              Excluir
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

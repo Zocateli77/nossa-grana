@@ -118,7 +118,7 @@ export function MassaPage() {
 
   const grade = (
     <>
-      <div className="overflow-x-auto rounded-2xl border">
+      <div className="overflow-x-auto rounded-2xl border -mx-1 px-1">
         <table className="w-full min-w-[1040px] text-sm">
           <thead className="bg-muted/60 text-xs text-muted-foreground">
             <tr>
@@ -130,15 +130,15 @@ export function MassaPage() {
           <tbody>
             {linhas.map((l, i) => (
               <tr key={i} className="border-t">
-                <td className="p-1"><Input className="h-9 min-w-[140px]" value={l.descricao} onChange={(e) => set(i, 'descricao', e.target.value)} /></td>
-                <td className="p-1"><Input className="h-9 w-24" value={l.valor} onChange={(e) => set(i, 'valor', e.target.value)} placeholder="0,00" /></td>
+                <td className="p-1"><Input className="h-11 min-w-[140px]" value={l.descricao} onChange={(e) => set(i, 'descricao', e.target.value)} /></td>
+                <td className="p-1"><Input className="h-11 w-24" value={l.valor} onChange={(e) => set(i, 'valor', e.target.value)} placeholder="0,00" /></td>
                 <td className="p-1"><SelectMini value={l.contaId} onChange={(v) => set(i, 'contaId', v)} opcoes={dados.contas} /></td>
                 <td className="p-1"><SelectMini value={l.categoriaId} onChange={(v) => set(i, 'categoriaId', v)} opcoes={dados.categorias} /></td>
                 <td className="p-1"><SelectMini value={l.donoId} onChange={(v) => set(i, 'donoId', v)} opcoes={dados.pessoas} /></td>
-                <td className="p-1"><Input type="date" className="h-9 w-36" value={l.data} onChange={(e) => set(i, 'data', e.target.value)} /></td>
-                <td className="p-1"><Input className="h-9 w-16" value={l.parcela} onChange={(e) => set(i, 'parcela', e.target.value)} placeholder="2/4" /></td>
+                <td className="p-1"><Input type="date" className="h-11 w-36" value={l.data} onChange={(e) => set(i, 'data', e.target.value)} /></td>
+                <td className="p-1"><Input className="h-11 w-16" value={l.parcela} onChange={(e) => set(i, 'parcela', e.target.value)} placeholder="2/4" /></td>
                 <td className="p-1">
-                  <select className="h-9 rounded-lg border bg-card px-2 text-sm" value={l.tipo} onChange={(e) => set(i, 'tipo', e.target.value)}>
+                  <select className="h-11 rounded-lg border bg-card px-2 text-sm" value={l.tipo} onChange={(e) => set(i, 'tipo', e.target.value)}>
                     {['despesa', 'investimento', 'imposto', 'emprestimo', 'receita'].map((t) => <option key={t} value={t}>{t}</option>)}
                   </select>
                 </td>
@@ -150,9 +150,16 @@ export function MassaPage() {
                     disabled={l.tipo !== 'investimento'}
                   />
                 </td>
-                <td className="p-1"><Input className="h-9 min-w-[100px]" value={l.obs} onChange={(e) => set(i, 'obs', e.target.value)} /></td>
+                <td className="p-1"><Input className="h-11 min-w-[100px]" value={l.obs} onChange={(e) => set(i, 'obs', e.target.value)} /></td>
                 <td className="p-1">
-                  <button className="text-muted-foreground hover:text-destructive p-1" onClick={() => setLinhas((ls) => ls.filter((_, idx) => idx !== i))}><Trash2 className="h-4 w-4" /></button>
+                  <button
+                    type="button"
+                    className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-destructive"
+                    aria-label="Remover linha"
+                    onClick={() => setLinhas((ls) => ls.filter((_, idx) => idx !== i))}
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </td>
               </tr>
             ))}
@@ -165,7 +172,7 @@ export function MassaPage() {
         <span className="text-xs text-muted-foreground">{validas.length} válida{validas.length !== 1 ? 's' : ''}</span>
       </div>
 
-      {erro && <p className="text-sm text-destructive mt-2">{erro}</p>}
+      {erro && <p className="text-sm text-destructive mt-2" role="alert">{erro}</p>}
 
       <Button className="w-full mt-4" size="lg" onClick={salvarTudo} disabled={salvar.isPending || validas.length === 0}>
         {salvar.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Salvar {validas.length} lançamento{validas.length !== 1 ? 's' : ''}
@@ -183,13 +190,13 @@ export function MassaPage() {
           <Button variant="outline" size="sm" onClick={() => setColar(true)}><ClipboardPaste className="h-4 w-4" /> Colar</Button>
         </div>
       </header>
-      <p className="text-sm text-muted-foreground mb-3">Adicione várias linhas e salve de uma vez. Toque em <b>Ampliar</b> para ver a tabela inteira; conta/categoria/pessoa também aceitam o nome ao colar da planilha.</p>
+      <p className="text-sm text-muted-foreground mb-3">Adicione várias linhas e salve de uma vez. Deslize horizontalmente para ver todas as colunas. Toque em <b>Ampliar</b> para tela cheia; conta/categoria/pessoa também aceitam o nome ao colar da planilha.</p>
 
       {!ampliado && grade}
 
       {ampliado && (
-        <div className="fixed inset-0 z-[60] bg-background overflow-auto">
-          <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-card px-4 py-3">
+        <div className="fixed inset-0 z-[60] bg-background overflow-auto pt-[env(safe-area-inset-top,0px)] pb-[env(safe-area-inset-bottom,0px)]">
+          <div className="sticky top-0 z-10 flex items-center justify-between border-b bg-card px-4 py-3 safe-bottom">
             <h2 className="font-bold">Entrada em massa</h2>
             <Button variant="outline" size="sm" onClick={() => setAmpliado(false)}><Minimize2 className="h-4 w-4" /> Reduzir</Button>
           </div>
@@ -204,7 +211,7 @@ export function MassaPage() {
 
 function SelectMini({ value, onChange, opcoes, disabled }: { value: string; onChange: (v: string) => void; opcoes: { id: string; nome: string }[]; disabled?: boolean }) {
   return (
-    <select className="h-9 rounded-lg border bg-card px-2 text-sm min-w-[120px] disabled:opacity-40" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
+    <select className="h-11 rounded-lg border bg-card px-2 text-sm min-w-[120px] disabled:opacity-40" value={value} onChange={(e) => onChange(e.target.value)} disabled={disabled}>
       <option value="">—</option>
       {opcoes.map((o) => <option key={o.id} value={o.id}>{o.nome}</option>)}
     </select>
@@ -215,7 +222,7 @@ function ColarDialog({ onClose, onImportar }: { onClose: () => void; onImportar:
   const [texto, setTexto] = useState('')
   return (
     <Dialog open onOpenChange={(o) => !o && onClose()}>
-      <DialogContent>
+      <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Colar da planilha</DialogTitle></DialogHeader>
         <div className="space-y-3">
           <Label className="text-muted-foreground">Uma linha por lançamento. Colunas separadas por TAB ou ";": Descrição, Valor, Conta, Categoria, Pessoa, Data, Parcela(X/Y), Tipo, Obs</Label>

@@ -29,7 +29,7 @@ import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Progress } from '@/components/ui/progress'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn, rechartsTooltipProps } from '@/lib/utils'
 
 const CORES_RENDA = {
   investimento: 'hsl(152 56% 38%)',
@@ -270,11 +270,7 @@ export function AnaliseDashboardPage() {
                   </Pie>
                   <Tooltip
                     formatter={(v: number) => money(v)}
-                    contentStyle={{
-                      borderRadius: 12,
-                      border: '1px solid hsl(var(--border))',
-                      background: 'hsl(var(--card))',
-                    }}
+                    {...rechartsTooltipProps}
                   />
                   <Legend
                     formatter={(value) => <span className="text-xs text-foreground">{value}</span>}
@@ -322,11 +318,7 @@ export function AnaliseDashboardPage() {
                       name === 'gasto' ? 'Gasto' : 'Orçado',
                     ]}
                     labelFormatter={(label) => String(label)}
-                    contentStyle={{
-                      borderRadius: 12,
-                      border: '1px solid hsl(var(--border))',
-                      background: 'hsl(var(--card))',
-                    }}
+                    {...rechartsTooltipProps}
                   />
                   <Bar dataKey="orcado" fill="hsl(var(--muted))" radius={[0, 4, 4, 0]} barSize={10} />
                   <Bar dataKey="gasto" radius={[0, 4, 4, 0]} barSize={10}>
@@ -379,11 +371,7 @@ export function AnaliseDashboardPage() {
                   </Pie>
                   <Tooltip
                     formatter={(v: number) => money(v)}
-                    contentStyle={{
-                      borderRadius: 12,
-                      border: '1px solid hsl(var(--border))',
-                      background: 'hsl(var(--card))',
-                    }}
+                    {...rechartsTooltipProps}
                   />
                   <Legend
                     formatter={(value) => <span className="text-xs text-foreground">{value}</span>}
@@ -426,11 +414,7 @@ export function AnaliseDashboardPage() {
                   money(v),
                   name === 'renda' ? 'Renda' : name === 'gasto' ? 'Gasto' : 'Investido',
                 ]}
-                contentStyle={{
-                  borderRadius: 12,
-                  border: '1px solid hsl(var(--border))',
-                  background: 'hsl(var(--card))',
-                }}
+                {...rechartsTooltipProps}
               />
               <Legend
                 formatter={(value) => (

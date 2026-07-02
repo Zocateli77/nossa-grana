@@ -9,7 +9,7 @@ import { CategoriaIcon } from '@/components/CategoriaIcon'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn, rechartsTooltipProps, themeColors } from '@/lib/utils'
 
 const ORDEM_TIPO: Record<string, number> = {
   gasto: 0,
@@ -63,9 +63,9 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
 
   const chartData = [
     ...categorias
-      .map((c) => ({ nome: c.nome, valor: percentuais[c.id] ?? 0, cor: c.cor ?? '#0f766e' }))
+      .map((c) => ({ nome: c.nome, valor: percentuais[c.id] ?? 0, cor: c.cor ?? themeColors.primary }))
       .filter((x) => x.valor > 0),
-    ...(sobra > 0 ? [{ nome: 'Nao alocado', valor: sobra, cor: '#cbd5e1' }] : []),
+    ...(sobra > 0 ? [{ nome: 'Não alocado', valor: sobra, cor: themeColors.mutedForeground }] : []),
   ]
 
   const legenda = categorias
@@ -87,7 +87,7 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
 
   async function salvarTudo() {
     if (acima > 0) {
-      setErro('O total precisa ficar em ate 100%.')
+      setErro('O total precisa ficar em até 100%.')
       return
     }
     setErro(null)
@@ -108,7 +108,7 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
       )
       setOk(true)
     } catch (e: any) {
-      setErro(e?.message ?? 'Erro ao salvar a distribuicao.')
+      setErro(e?.message ?? 'Erro ao salvar a distribuição.')
     }
   }
 
@@ -119,7 +119,7 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
           <div>
             <div className="flex items-center gap-2">
               <SlidersHorizontal className="h-4 w-4 text-primary" />
-              <h2 className="font-extrabold tracking-tight">Distribuicao por %</h2>
+              <h2 className="font-extrabold tracking-tight">Distribuição por %</h2>
             </div>
             <p className="mt-0.5 text-xs text-muted-foreground">Renda prevista: {money(renda)}</p>
           </div>
@@ -134,14 +134,14 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
           <div className="mx-auto h-44 w-full max-w-[220px]">
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
-                <Pie data={chartData.length ? chartData : [{ nome: 'Nao alocado', valor: 100, cor: '#cbd5e1' }]} dataKey="valor" nameKey="nome" innerRadius={54} outerRadius={78} stroke="hsl(var(--card))" strokeWidth={2}>
-                  {(chartData.length ? chartData : [{ nome: 'Nao alocado', valor: 100, cor: '#cbd5e1' }]).map((d) => (
+                <Pie data={chartData.length ? chartData : [{ nome: 'Não alocado', valor: 100, cor: themeColors.mutedForeground }]} dataKey="valor" nameKey="nome" innerRadius={54} outerRadius={78} stroke="hsl(var(--card))" strokeWidth={2}>
+                  {(chartData.length ? chartData : [{ nome: 'Não alocado', valor: 100, cor: themeColors.mutedForeground }]).map((d) => (
                     <Cell key={d.nome} fill={d.cor} />
                   ))}
                 </Pie>
                 <Tooltip
                   formatter={(v: number, n: string) => [`${pctText(v)} - ${money((Number(v) / 100) * renda)}`, n]}
-                  contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))' }}
+                  {...rechartsTooltipProps}
                 />
               </PieChart>
             </ResponsiveContainer>
@@ -151,7 +151,7 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
             {legenda.slice(0, 8).map(({ categoria, valor }) => (
               <div key={categoria.id} className="flex items-center justify-between gap-2 text-xs">
                 <span className="inline-flex min-w-0 items-center gap-2">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: categoria.cor ?? '#0f766e' }} />
+                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ backgroundColor: categoria.cor ?? themeColors.primary }} />
                   <span className="truncate">{categoria.nome}</span>
                 </span>
                 <span className="font-semibold tabular-nums">{pctText(valor)}</span>
@@ -159,7 +159,7 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
             ))}
             {sobra > 0 && (
               <div className="flex items-center justify-between gap-2 border-t pt-2 text-xs text-muted-foreground">
-                <span>Nao alocado</span>
+                <span>Não alocado</span>
                 <span className="font-semibold tabular-nums">{pctText(sobra)}</span>
               </div>
             )}
@@ -186,7 +186,7 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
                             step={1}
                             value={value}
                             onChange={(e) => alterar(c.id, Number(e.target.value))}
-                            className="h-8 w-16 rounded-lg border bg-background px-2 text-right text-sm font-bold tabular-nums"
+                            className="h-11 w-16 rounded-lg border bg-background px-2 text-right text-sm font-bold tabular-nums"
                           />
                           <span className="text-sm font-semibold text-muted-foreground">%</span>
                         </label>
@@ -199,8 +199,8 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
                           step={1}
                           value={value}
                           onChange={(e) => alterar(c.id, Number(e.target.value))}
-                          className="h-2 w-full cursor-pointer"
-                          style={{ accentColor: c.cor ?? '#0f766e' }}
+                          className="h-3 w-full cursor-pointer"
+                          style={{ accentColor: c.cor ?? themeColors.primary }}
                           aria-label={`${c.nome} em percentual da renda`}
                         />
                         <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
@@ -229,9 +229,12 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
             </Button>
           </div>
           <div className="mt-2 min-h-5 text-xs">
+            {renda <= 0 && !acima && !ok && !erro && (
+              <span className="text-muted-foreground">Defina a renda prevista antes de distribuir.</span>
+            )}
             {acima > 0 && <span className="font-medium text-destructive">Acima de 100% em {pctText(acima)}.</span>}
             {!acima && sobra > 0 && <span className="text-muted-foreground">Sobra {pctText(sobra)} da renda.</span>}
-            {ok && <span className="font-medium text-success">Distribuicao salva.</span>}
+            {ok && <span className="font-medium text-success">Distribuição salva.</span>}
             {erro && <span className="font-medium text-destructive">{erro}</span>}
           </div>
         </div>

@@ -8,10 +8,11 @@ import { money, dataCurta } from '@/lib/format'
 import type { TipoConta } from '@/types/db'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
-import { Carregando } from '@/components/Estados'
+import { Carregando, Vazio } from '@/components/Estados'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { themeColors, withAlpha } from '@/lib/utils'
 
 const ICON: Record<TipoConta, typeof CreditCard> = {
   cartao_credito: CreditCard,
@@ -38,7 +39,16 @@ export function ContasPage() {
   // ----- detalhe -----
   if (id) {
     const conta = dados.contas.find((c) => c.id === id)
-    if (!conta) return null
+    if (!conta) {
+      return (
+        <Vazio
+          icon={Wallet}
+          titulo="Conta não encontrada"
+          descricao="Esta conta pode ter sido removida ou o link está incorreto."
+          acao={<Button onClick={() => navigate('/contas')}>Voltar para contas</Button>}
+        />
+      )
+    }
     const lancs = lancsDoMes(dados.lancamentos, mesRef)
       .filter((l) => l.conta_id === id)
       .sort((a, b) => (a.data < b.data ? 1 : -1))
@@ -47,10 +57,12 @@ export function ContasPage() {
     return (
       <div>
         <header className="flex items-center gap-2 mb-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate('/contas')}><ArrowLeft className="h-5 w-5" /></Button>
+          <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => navigate('/contas')} aria-label="Voltar">
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
           <h1 className="text-xl font-extrabold tracking-tight truncate">{conta.nome}</h1>
         </header>
-        <Card className="p-5 mb-4" style={{ borderColor: (conta.cor ?? '') + '55' }}>
+        <Card className="p-5 mb-4" style={{ borderColor: withAlpha(conta.cor ?? themeColors.primary, 0.33) }}>
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><Icon className="h-4 w-4" /> {ROTULO[conta.tipo]}</div>
           <p className="text-3xl font-extrabold mt-1">{money(total)}</p>
           <p className="text-xs text-muted-foreground">total no mês{conta.dia_vencimento ? ` · vence dia ${conta.dia_vencimento}` : ''}</p>
@@ -92,13 +104,31 @@ export function ContasPage() {
         <p className="text-2xl font-extrabold">{money(totalGeral)}</p>
       </Card>
       <div className="space-y-2">
-        {contasComTotal.map(({ conta, total }) => {
+        {contasComTotal.length === 0 ? (
+          <Vazio
+            icon={Wallet}
+            titulo="Nenhuma conta cadastrada"
+            descricao="As contas aparecem aqui quando configuradas no sistema."
+          />
+        ) : (
+          contasComTotal.map(({ conta, total }) => {
           const Icon = ICON[conta.tipo]
           const dono = dados.pessoas.find((p) => p.id === conta.dono_id)
           return (
-            <button key={conta.id} onClick={() => navigate(`/contas/${conta.id}`)} className="w-full text-left">
+            <button
+              key={conta.id}
+              onClick={() => navigate(`/contas/${conta.id}`)}
+              className="w-full text-left"
+              aria-label={`${conta.nome}, ${money(total)} no mês`}
+            >
               <Card className="p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
-                <span className="flex h-10 w-10 items-center justify-center rounded-xl" style={{ backgroundColor: (conta.cor ?? '#14b8a6') + '22', color: conta.cor ?? '#14b8a6' }}>
+                <span
+                  className="flex h-10 w-10 items-center justify-center rounded-xl"
+                  style={{
+                    backgroundColor: withAlpha(conta.cor ?? themeColors.primary, 0.13),
+                    color: conta.cor ?? themeColors.primary,
+                  }}
+                >
                   <Icon className="h-5 w-5" />
                 </span>
                 <div className="min-w-0 flex-1">
@@ -112,7 +142,8 @@ export function ContasPage() {
               </Card>
             </button>
           )
-        })}
+        })
+        )}
       </div>
     </div>
   )

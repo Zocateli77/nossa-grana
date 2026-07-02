@@ -75,7 +75,14 @@ export function OrcamentosPage() {
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="font-medium truncate">{c.nome}</span>
-                          <button onClick={() => setEditar(c)} className="text-muted-foreground hover:text-primary"><Pencil className="h-4 w-4" /></button>
+                          <button
+                            type="button"
+                            onClick={() => setEditar(c)}
+                            className="inline-flex h-11 w-11 items-center justify-center text-muted-foreground hover:text-primary"
+                            aria-label={`Editar envelope ${c.nome}`}
+                          >
+                            <Pencil className="h-4 w-4" />
+                          </button>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {money(env.gasto)} de {money(env.estabelecido)}
@@ -287,7 +294,14 @@ function NovaCategoriaDialog({ onClose }: { onClose: () => void }) {
             <Label>Cor</Label>
             <div className="flex flex-wrap gap-2">
               {CORES.map((c) => (
-                <button key={c} onClick={() => setCor(c)} className="h-7 w-7 rounded-full ring-offset-2 ring-offset-background" style={{ backgroundColor: c, outline: cor === c ? `2px solid ${c}` : 'none' }} />
+                <button
+                  key={c}
+                  type="button"
+                  onClick={() => setCor(c)}
+                  aria-label={`Cor ${c}`}
+                  className="h-10 w-10 rounded-full ring-offset-2 ring-offset-background"
+                  style={{ backgroundColor: c, outline: cor === c ? `2px solid ${c}` : 'none' }}
+                />
               ))}
             </div>
           </div>
@@ -295,8 +309,8 @@ function NovaCategoriaDialog({ onClose }: { onClose: () => void }) {
             <Label>Ícone</Label>
             <div className="flex flex-wrap gap-2">
               {ICONES.map((i) => (
-                <button key={i} onClick={() => setIcone(i)}>
-                  <CategoriaIcon icone={i} cor={cor} className={'h-9 w-9 ' + (icone === i ? 'ring-2 ring-primary' : '')} size={18} />
+                <button key={i} type="button" onClick={() => setIcone(i)} aria-label={`Ícone ${i}`}>
+                  <CategoriaIcon icone={i} cor={cor} className={'h-11 w-11 ' + (icone === i ? 'ring-2 ring-primary' : '')} size={18} />
                 </button>
               ))}
             </div>

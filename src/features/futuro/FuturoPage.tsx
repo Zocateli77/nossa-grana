@@ -8,7 +8,7 @@ import { money, moneyCompact, mesCurto, mesExtenso } from '@/lib/format'
 import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { cn } from '@/lib/utils'
+import { cn, rechartsTooltipProps } from '@/lib/utils'
 
 const HORIZONTES = [3, 6, 12]
 
@@ -28,9 +28,18 @@ export function FuturoPage() {
     <div>
       <header className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-extrabold tracking-tight">Futuro</h1>
-        <div className="flex gap-1 rounded-xl bg-muted p-1">
+        <div className="flex gap-1 rounded-xl bg-muted p-1" role="group" aria-label="Horizonte de projeção">
           {HORIZONTES.map((h) => (
-            <button key={h} onClick={() => setMeses(h)} className={cn('rounded-lg px-3 py-1 text-xs font-medium', meses === h ? 'bg-card shadow-sm' : 'text-muted-foreground')}>
+            <button
+              key={h}
+              type="button"
+              onClick={() => setMeses(h)}
+              aria-pressed={meses === h}
+              className={cn(
+                'min-h-11 rounded-lg px-4 py-2 text-sm font-medium',
+                meses === h ? 'bg-card shadow-sm' : 'text-muted-foreground'
+              )}
+            >
               {h}m
             </button>
           ))}
@@ -44,7 +53,7 @@ export function FuturoPage() {
             <LineChart data={chart} margin={{ top: 5, right: 8, bottom: 0, left: 8 }}>
               <XAxis dataKey="mes" tick={{ fontSize: 11 }} stroke="hsl(var(--muted-foreground))" />
               <YAxis tickFormatter={(v) => moneyCompact(v)} tick={{ fontSize: 11 }} width={52} stroke="hsl(var(--muted-foreground))" />
-              <Tooltip formatter={(v: number) => money(v)} labelClassName="text-foreground" contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))' }} />
+              <Tooltip formatter={(v: number) => money(v)} {...rechartsTooltipProps} />
               <ReferenceLine y={0} stroke="hsl(var(--destructive))" strokeDasharray="3 3" />
               <Line type="monotone" dataKey="saldo" stroke="hsl(var(--primary))" strokeWidth={2.5} dot={{ r: 3 }} />
             </LineChart>

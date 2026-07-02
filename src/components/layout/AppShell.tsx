@@ -66,9 +66,13 @@ function MaisSheet() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <button className="flex flex-1 flex-col items-center gap-0.5 py-2 text-muted-foreground">
+        <button
+          type="button"
+          className="flex flex-1 flex-col items-center gap-0.5 py-2 text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded-lg"
+          aria-label="Mais opções"
+        >
           <Menu className="h-5 w-5" />
-          <span className="text-[10px] font-medium">Mais</span>
+          <span className="text-xs font-medium">Mais</span>
         </button>
       </SheetTrigger>
       <SheetContent side="bottom" className="rounded-t-3xl">
@@ -132,7 +136,7 @@ function BottomItem({ item }: { item: NavItem }) {
       }
     >
       <Icon className="h-5 w-5" />
-      <span className="text-[10px] font-medium">{item.label}</span>
+      <span className="text-xs font-medium">{item.label}</span>
     </NavLink>
   )
 }
@@ -141,7 +145,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-screen md:flex bg-background">
       <Sidebar />
-      <main className="flex-1 min-w-0 pb-24 md:pb-0">
+      <main className="flex-1 min-w-0 pb-[calc(6rem+env(safe-area-inset-bottom,0px))] md:pb-0">
         <div className="mx-auto w-full max-w-3xl px-4 py-4 md:py-6">{children}</div>
       </main>
       <BottomNav />

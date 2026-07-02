@@ -6,7 +6,7 @@ import { orcamentoEfetivo } from '@/lib/calc'
 import { money, pct } from '@/lib/format'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
 import { Card } from '@/components/ui/card'
-import { cn } from '@/lib/utils'
+import { cn, rechartsTooltipProps, themeColors } from '@/lib/utils'
 
 export function AlocacaoRenda({
   dados,
@@ -35,8 +35,8 @@ export function AlocacaoRenda({
   const excedente = Math.max(0, total - renda)
 
   const dataChart = [
-    ...itens.map((x) => ({ nome: x.categoria.nome, valor: x.valor, cor: x.categoria.cor ?? '#14b8a6' })),
-    ...(naoAlocado > 0 ? [{ nome: 'Não alocado', valor: naoAlocado, cor: '#cbd5e1' }] : []),
+    ...itens.map((x) => ({ nome: x.categoria.nome, valor: x.valor, cor: x.categoria.cor ?? themeColors.primary })),
+    ...(naoAlocado > 0 ? [{ nome: 'Não alocado', valor: naoAlocado, cor: themeColors.mutedForeground }] : []),
   ]
 
   const corPct = excedente > 0 ? 'text-destructive' : naoAlocado === 0 ? 'text-success' : 'text-foreground'
@@ -61,13 +61,13 @@ export function AlocacaoRenda({
               </Pie>
               <Tooltip
                 formatter={(v: number, n: string) => [`${money(v)} · ${pct(renda > 0 ? v / renda : 0)}`, n]}
-                contentStyle={{ borderRadius: 12, border: '1px solid hsl(var(--border))', background: 'hsl(var(--card))' }}
+                {...rechartsTooltipProps}
               />
             </PieChart>
           </ResponsiveContainer>
           <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
             <span className={cn('text-2xl font-extrabold', corPct)}>{Math.round(totalPct * 100)}%</span>
-            <span className="text-[10px] text-muted-foreground -mt-1">alocado</span>
+            <span className="text-xs text-muted-foreground -mt-1">alocado</span>
           </div>
         </div>
 
@@ -105,7 +105,7 @@ export function AlocacaoRenda({
                   </span>
                 </div>
                 <div className="mt-1 h-1.5 w-full rounded-full bg-muted overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, p * 100)}%`, backgroundColor: categoria.cor ?? '#14b8a6' }} />
+                  <div className="h-full rounded-full" style={{ width: `${Math.min(100, p * 100)}%`, backgroundColor: categoria.cor ?? themeColors.primary }} />
                 </div>
               </div>
             </div>

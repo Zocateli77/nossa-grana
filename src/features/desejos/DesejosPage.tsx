@@ -37,7 +37,7 @@ const STATUS_LABEL: Record<StatusDesejo, string> = {
 
 const PRIORIDADES: { value: PrioridadeDesejo; label: string }[] = [
   { value: 'baixa', label: 'Baixa' },
-  { value: 'media', label: 'Media' },
+  { value: 'media', label: 'Média' },
   { value: 'alta', label: 'Alta' },
 ]
 
@@ -121,7 +121,7 @@ export function DesejosPage() {
 
       {historico.length > 0 && (
         <>
-          <SecaoTitulo>Historico</SecaoTitulo>
+          <SecaoTitulo>Histórico</SecaoTitulo>
           <Card className="divide-y">
             {historico.map((d) => (
               <div key={d.id} className="flex items-center gap-3 p-3">
@@ -202,7 +202,7 @@ function DesejoCard({
         <div className="min-w-0 flex-1">
           <div className="flex items-start justify-between gap-2">
             <p className="font-semibold leading-tight">{desejo.nome}</p>
-            <Badge variant={variant}>{v.estado === 'verde' ? 'Cabe' : v.estado === 'vermelho' ? 'Nao cabe' : 'Simular'}</Badge>
+            <Badge variant={variant}>{v.estado === 'verde' ? 'Cabe' : v.estado === 'vermelho' ? 'Não cabe' : 'Simular'}</Badge>
           </div>
           <p className="mt-1 text-xs text-muted-foreground">{v.motivo}</p>
         </div>
@@ -302,7 +302,7 @@ function DesejoDialog({ desejo, dados, onClose }: { desejo: Desejo | null; dados
               <Input type="number" min={1} value={parcelas} onChange={(e) => setParcelas(Math.max(1, Number(e.target.value)))} />
             </div>
             <div className="space-y-1.5">
-              <Label>Mes inicio</Label>
+              <Label>Mês início</Label>
               <Input type="month" value={mes} onChange={(e) => setMes(e.target.value)} />
             </div>
           </div>

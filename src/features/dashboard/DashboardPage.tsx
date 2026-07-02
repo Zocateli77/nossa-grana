@@ -52,7 +52,7 @@ export function DashboardPage() {
   const barraCor = pctR >= 1 ? 'bg-destructive' : pctR >= 0.8 ? 'bg-warning' : 'bg-primary'
 
   return (
-    <div className="space-y-1">
+    <div className="space-y-4">
       <header className="flex items-center justify-between mb-2">
         <div>
           <p className="text-sm text-muted-foreground">Olá! 👋</p>
@@ -301,9 +301,9 @@ function ReservaCard({ titulo, icon: Icon, feito, total, cor }: { titulo: string
 function Cascata({ resumo }: { resumo: ReturnType<typeof resumoMes> }) {
   const partes = [
     { nome: 'Investir', valor: resumo.reservadoInvestimento, cls: 'bg-success' },
-    { nome: 'Impostos', valor: resumo.reservadoImpostos, cls: 'bg-slate-400' },
+    { nome: 'Impostos', valor: resumo.reservadoImpostos, cls: 'bg-muted-foreground/60' },
     { nome: 'Gastos', valor: resumo.orcadoGastosMesada, cls: 'bg-primary' },
-    { nome: 'Sobra', valor: Math.max(0, resumo.disponivelLivre), cls: 'bg-emerald-300' },
+    { nome: 'Sobra', valor: Math.max(0, resumo.disponivelLivre), cls: 'bg-success/40' },
   ]
   const base = Math.max(resumo.renda, resumo.comprometido, 1)
   return (

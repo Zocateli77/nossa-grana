@@ -16,6 +16,7 @@ import { Label } from '@/components/ui/label'
 import { MoneyInput } from '@/components/MoneyInput'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { themeColors } from '@/lib/utils'
 
 export function MetasPage() {
   const { dados, isLoading } = useDados()
@@ -79,7 +80,7 @@ export function NovaMetaDialog({ onClose }: { onClose: () => void }) {
 
   async function onSave() {
     if (!nome.trim() || alvo <= 0) return
-    await salvar.mutateAsync({ nome: nome.trim(), tipo, valor_alvo: alvo, data_alvo: dataAlvo || null, cor: '#10b981', icone: 'target' })
+    await salvar.mutateAsync({ nome: nome.trim(), tipo, valor_alvo: alvo, data_alvo: dataAlvo || null, cor: themeColors.success, icone: 'target' })
     onClose()
   }
   return (

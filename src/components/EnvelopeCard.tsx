@@ -24,7 +24,12 @@ export function EnvelopeCard({ env, mostrarSemana = true }: { env: EnvelopeInfo;
   return (
     <Link
       to={`/lancamentos?categoria=${env.categoria.id}`}
-      className="block rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md"
+      className="block rounded-2xl border bg-card p-4 shadow-sm transition-shadow hover:shadow-md active:bg-accent/30"
+      aria-label={
+        semOrc
+          ? `${env.categoria.nome}, gasto ${money(env.gasto)}, sem envelope definido`
+          : `${env.categoria.nome}, ${pct(env.pct)} usado, restam ${money(env.resta)}`
+      }
     >
       <div className="flex items-start gap-3">
         <CategoriaIcon icone={env.categoria.icone} cor={env.categoria.cor} className="h-10 w-10" size={20} />
@@ -51,7 +56,7 @@ export function EnvelopeCard({ env, mostrarSemana = true }: { env: EnvelopeInfo;
       <Progress value={env.pct * 100} indicatorClassName={c.barra} className="mt-3" />
 
       {!semOrc && mostrarSemana && (
-        <div className="mt-2 flex items-center justify-between text-xs text-muted-foreground">
+        <div className="mt-2 flex flex-col gap-0.5 text-xs text-muted-foreground sm:flex-row sm:items-center sm:justify-between">
           <span>~{money(env.ritmoSemanal)}/semana</span>
           {env.gastoSemana > 0 ? (
             <span>

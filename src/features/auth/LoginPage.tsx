@@ -22,7 +22,7 @@ export function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-gradient-to-b from-secondary to-background">
+    <div className="min-h-screen flex items-center justify-center p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1rem,env(safe-area-inset-bottom))] bg-gradient-to-b from-secondary to-background">
       <div className="w-full max-w-sm">
         <div className="flex flex-col items-center text-center mb-8">
           <span className="flex h-16 w-16 items-center justify-center rounded-3xl bg-primary text-primary-foreground shadow-lg mb-4">
@@ -49,10 +49,20 @@ export function LoginPage() {
               required
             />
           </div>
-          {erro && <p className="text-sm text-destructive">{erro}</p>}
-          <Button type="submit" size="lg" className="w-full" disabled={carregando}>
-            {carregando && <Loader2 className="h-4 w-4 animate-spin" />}
-            Entrar
+          {erro && (
+            <p className="text-sm text-destructive" role="alert" aria-live="assertive">
+              {erro}
+            </p>
+          )}
+          <Button type="submit" size="lg" className="w-full" disabled={carregando} aria-busy={carregando}>
+            {carregando ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                Entrando…
+              </>
+            ) : (
+              'Entrar'
+            )}
           </Button>
         </form>
       </div>

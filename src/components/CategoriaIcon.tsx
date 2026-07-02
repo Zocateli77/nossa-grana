@@ -23,7 +23,7 @@ import {
   Coffee,
   type LucideProps,
 } from 'lucide-react'
-import { cn } from '@/lib/utils'
+import { cn, themeColors, withAlpha } from '@/lib/utils'
 
 // Mapa curado (tree-shakeable) dos ícones usados em categorias/metas.
 const MAPA: Record<string, React.ComponentType<LucideProps>> = {
@@ -67,11 +67,12 @@ export function CategoriaIcon({
   className?: string
   size?: number
 }) {
-  const color = cor ?? '#14b8a6'
+  const color = cor ?? themeColors.primary
   return (
     <span
       className={cn('inline-flex items-center justify-center rounded-xl shrink-0', className)}
-      style={{ backgroundColor: `${color}1f`, color }}
+      style={{ backgroundColor: withAlpha(color, 0.12), color }}
+      aria-hidden="true"
     >
       <LucideByName name={icone ?? undefined} size={size} />
     </span>

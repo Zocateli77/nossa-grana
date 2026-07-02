@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { MoneyInput } from '@/components/MoneyInput'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
 import { Carregando } from '@/components/Estados'
-import { cn } from '@/lib/utils'
+import { cn, themeColors } from '@/lib/utils'
 
 const TIPOS: { v: TipoLancamento; label: string }[] = [
   { v: 'despesa', label: 'Despesa' },
@@ -220,7 +220,7 @@ export function NovoLancamentoPage() {
   return (
     <div className="max-w-xl mx-auto">
       <header className="flex items-center gap-2 mb-4">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
+        <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => navigate(-1)} aria-label="Voltar">
           <ArrowLeft className="h-5 w-5" />
         </Button>
         <h1 className="text-xl font-extrabold tracking-tight">{editando ? 'Editar lançamento' : 'Novo lançamento'}</h1>
@@ -280,7 +280,7 @@ export function NovoLancamentoPage() {
                 {categoriasFiltradas.map((c) => (
                   <SelectItem key={c.id} value={c.id}>
                     <span className="inline-flex items-center gap-2">
-                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.cor ?? '#999' }} />
+                      <span className="h-2.5 w-2.5 rounded-full" style={{ backgroundColor: c.cor ?? themeColors.mutedForeground }} />
                       {c.nome}
                     </span>
                   </SelectItem>

@@ -34,16 +34,19 @@ export function EscopoSerieDialog({
           <DialogTitle>{titulo}</DialogTitle>
         </DialogHeader>
         {descricao && <p className="-mt-1 text-sm text-muted-foreground">{descricao}</p>}
-        <div className="flex flex-col gap-2 pt-1">
+        <div className="flex flex-col gap-2 pt-1" role="radiogroup" aria-label={titulo}>
           {opcoes.map((o) => {
             const Icon = o.icon
             return (
               <button
                 key={o.escopo}
+                type="button"
+                role="radio"
+                aria-checked={false}
                 onClick={() => onEscolher(o.escopo)}
                 className={cn(
-                  'flex items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-accent/50',
-                  destrutivo && o.escopo !== 'uma' && 'hover:border-destructive/50'
+                  'flex min-h-11 items-center gap-3 rounded-xl border p-3 text-left transition-colors hover:bg-accent/50',
+                  destrutivo && o.escopo !== 'uma' && 'border-destructive/30 hover:border-destructive/50'
                 )}
               >
                 <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-secondary">

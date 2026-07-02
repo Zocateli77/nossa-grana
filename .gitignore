@@ -1,3 +1,8 @@
+# Dados financeiros reais (não versionar)
+CONTROLE FINANCEIRO*.csv
+*.csv
+!scripts/sample-financeiro.csv
+
 node_modules
 dist
 dist-ssr

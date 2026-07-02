@@ -1,0 +1,12 @@
+O que?; Valor ;Forma de pgto;Parcelamento;OBS;;;Forma de pgto; Valor Total ; Obs ;;O que?; Valor Estab. ; Valor Gasto ; Subtração 
+Supermercado; R$ 150,00 ;Nubank - Pessoa A;1 de 1;;;;Nubank - Pessoa A; R$ 500,00 ;;;Mercado; R$ 1.000,00 ; R$ 150,00 ; R$ 850,00 
+Streaming; R$ 39,90 ;Conta Pessoa A;1 de 1;;;;Nubank - Pessoa B; R$ 200,00 ;;;Roupas; R$ 500,00 ; R$ 79,00 ; R$ 421,00 
+Farmácia; R$ 45,50 ;Cartão Compartilhado;1 de 1;;;;Cartão Amazon; R$ 120,00 ;;;;;;
+Aluguel; R$ 1.200,00 ;Pix/Dinheiro;1 de 1;;;;Cartão Mercado Pago; R$ 80,00 ;;;;;;
+Investimento mensal; R$ 500,00 ;Conta Pessoa A;1 de 1;;;;Empréstimo; R$ 300,00 ;;;;;;
+Empréstimo parcela; R$ 300,00 ;Empréstimo;3 de 12;;;;Pix/Dinheiro; R$ 1.500,00 ;;;;;;
+Curso online; R$ 89,00 ;Nubank - Pessoa B;2 de 6;;;;;;;;
+Academia; R$ 120,00 ;Nubank - Pessoa A;1 de 1;;;;TOTAL; R$ 2.700,00 ;;;;;;
+Pet shop; R$ 65,00 ;Cartão Amazon;1 de 1;;;;SALÁRIO; R$ 8.000,00 ;;;;;;
+Mercado Livre; R$ 55,00 ;Cartão Mercado Pago;1 de 1;;;;;;;;;;;
+Mesada extra; R$ 50,00 ;Pix/Dinheiro;1 de 1;;;;;;;;;;;

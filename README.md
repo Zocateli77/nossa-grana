@@ -1,6 +1,6 @@
-# 🐷 Nossa Grana
+# Nossa Grana
 
-App de **controle financeiro do casal** (Pessoa A & Pessoa B) — orçamento por **envelopes**, com visão de
+App de **controle financeiro do casal** — orçamento por **envelopes**, com visão de
 **mês e semana**, reservas de investimento/impostos, parcelas, recorrências, metas, mesada e projeção de
 futuro. Mobile-first, em português, com Supabase. Tom calmo e clean — paz com o dinheiro.
 
@@ -17,13 +17,13 @@ npm run build      # build de produção (PWA incluso)
 npm run preview    # serve o build
 ```
 
-**Login:** conta única compartilhada do casal (e-mail + senha definidos no Supabase Auth; a senha fica
+**Login:** conta única compartilhada (e-mail + senha definidos no Supabase Auth; credenciais ficam
 em `env.Supabase.txt`, fora do git).
 
 ### Variáveis de ambiente (`.env.local`)
 ```
-VITE_SUPABASE_URL=https://epiudtrblgeljjmogaho.supabase.co
-VITE_SUPABASE_ANON_KEY=sb_publishable_...
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_ANON_KEY=your-publishable-anon-key
 ```
 > O frontend usa **apenas** a publishable key. A `service_role` e a senha do banco ficam só nos scripts
 > locais (`env.Supabase.txt`, fora do git) e nunca vão para o bundle.
@@ -31,14 +31,25 @@ VITE_SUPABASE_ANON_KEY=sb_publishable_...
 ## Banco de dados / seed
 
 ```bash
-npm run setup      # cria schema + RLS + triggers, semeia os dados e importa o CSV de julho
+npm run setup      # cria schema + RLS + triggers, semeia os dados e importa o CSV de exemplo
 ```
 
-O `scripts/setup.mjs` conecta direto no Postgres (lendo a senha de `env.Supabase.txt`), aplica
+O `scripts/setup.mjs` conecta direto no Postgres (lendo credenciais de `env.Supabase.txt`), aplica
 `scripts/schema.sql` (tabelas, RLS, trigger que recalcula o progresso das metas), semeia pessoas/contas/
-categorias/metas/orçamentos e importa **79 lançamentos** de `CONTROLE FINANCEIRO(JULHO).csv`
+categorias/metas/orçamentos e importa lançamentos de `scripts/sample-financeiro.csv`
 (parser em `scripts/import-csv.mjs`, com auto-categorização). É **idempotente** (faz `truncate` e
-recria). Os lançamentos são datados em **julho/2026**; ajuste a constante `MES` no script para mudar.
+recria). Os lançamentos de exemplo são datados em **julho/2026**; ajuste a constante `MES` no script para mudar.
+
+> **Dados reais:** planilhas CSV com finanças pessoais **não devem ser versionadas**. O `.gitignore` bloqueia
+> `*.csv` exceto o arquivo de exemplo em `scripts/`.
+
+### `env.Supabase.txt` (local, fora do git)
+```
+Url:https://your-project.supabase.co
+senha:sua-senha-do-banco
+service_role:eyJ...
+login_email:seu-email@exemplo.com
+```
 
 ## Estrutura
 
@@ -49,12 +60,13 @@ src/
   contexts/   AuthContext, AppContext (mês, salário base, tema)
   components/  ui/ (shadcn), EnvelopeCard, MoneyInput, CategoriaIcon, layout/
   features/   dashboard, lancamentos, orcamentos, contas, metas, futuro, massa, config, auth
-scripts/      schema.sql, setup.mjs, import-csv.mjs
+scripts/      schema.sql, setup.mjs, import-csv.mjs, sample-financeiro.csv
 ```
 
 ## Telas
 - **Início** — disponível livre do mês, reservas (investimento/impostos), mesadas, envelopes (mês +
   ritmo semanal), parcelas e metas.
+- **Dashboard** — análise consolidada, quanto ainda pode gastar sem afetar investimento, gráficos.
 - **Extrato** — lista (recente no topo), busca, filtros, editar/duplicar/excluir.
 - **Novo lançamento** — entrada rápida, parcelas (valor da parcela X/Y **ou** total ÷ parcelas),
   recorrente, meta vinculada.
@@ -72,5 +84,5 @@ cronograma, recorrências, progresso de metas e projeção de futuro. Detalhes n
 - Privacidade da **mesada** é tratada na interface (mostra só o total, sem exigir justificativa).
 - **Recorrências:** orçamentos recorrentes herdam para os meses seguintes e os lançamentos recorrentes
   entram na projeção de futuro (não são copiados fisicamente ao virar o mês — simplificação consciente).
-- **Itens "A classificar":** lançamentos ambíguos da planilha (ex.: "Mercado Livre", "Amazon BR",
-  "Pix Crédito") ficam na categoria *A classificar* para revisão no Extrato.
+- **Itens "A classificar":** lançamentos ambíguos da planilha (ex.: marketplaces genéricos) ficam na
+  categoria *A classificar* para revisão no Extrato.

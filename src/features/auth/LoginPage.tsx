@@ -7,7 +7,7 @@ import { useAuth } from '@/contexts/AuthContext'
 
 export function LoginPage() {
   const { entrar } = useAuth()
-  const [email, setEmail] = useState('zocateli2001@gmail.com')
+  const [email, setEmail] = useState('')
   const [senha, setSenha] = useState('')
   const [erro, setErro] = useState<string | null>(null)
   const [carregando, setCarregando] = useState(false)

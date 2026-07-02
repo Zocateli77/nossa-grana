@@ -31,9 +31,14 @@ function parseParcela(raw) {
 const CONTA_MAP = {
   'cartao - amazon': 'Cartão Amazon',
   'cartao - mercado pago': 'Cartão Mercado Pago',
-  'cartao compartilhado': 'Cartão da Alê',
+  'cartao compartilhado': 'Cartão Compartilhado',
+  'cartao compartilhado': 'Cartão Compartilhado',
   'emprestimo': 'Empréstimo',
-  'inter - pessoa a': 'Inter - Pessoa A',
+  'conta pessoa a': 'Conta Pessoa A',
+  'inter - pessoa a': 'Conta Pessoa A',
+  'nubank - pessoa a': 'Nubank - Pessoa A',
+  'nubank - pessoa b': 'Nubank - Pessoa B',
+  'nubank - pessoa c': 'Nubank - Pessoa C',
   'nubank - pessoa b': 'Nubank - Pessoa B',
   'nubank - pessoa a': 'Nubank - Pessoa A',
   'nubank - pessoa c': 'Nubank - Pessoa C',
@@ -78,9 +83,9 @@ export function categorizar(descricao) {
 
 export function donoPorDescricao(descricao) {
   const d = norm(descricao)
-  if (/pessoa b/.test(d)) return 'Pessoa B'
-  if (/pessoa a/.test(d)) return 'Pessoa A'
-  if (/pessoa c/.test(d)) return 'Pessoa C'
+  if (/pessoa b|pessoa b/.test(d)) return 'Pessoa B'
+  if (/pessoa a|pessoa a/.test(d)) return 'Pessoa A'
+  if (/pessoa c|pessoa c/.test(d)) return 'Pessoa C'
   return null
 }
 

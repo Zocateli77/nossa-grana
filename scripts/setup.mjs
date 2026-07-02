@@ -23,13 +23,14 @@ function lerCredenciais() {
     url: out['url'],
     senha: out['senha'],
     serviceRole: out['service_role'],
+    loginEmail: out['login_email'] || process.env.LOGIN_EMAIL || 'usuario@exemplo.com',
   }
 }
 
 const cred = lerCredenciais()
 const ref = new URL(cred.url).hostname.split('.')[0]
 const DB_HOST = `db.${ref}.supabase.co`
-const LOGIN_EMAIL = 'zocateli2001@gmail.com'
+const LOGIN_EMAIL = cred.loginEmail
 const LOGIN_SENHA = cred.senha
 const MES = '2026-07-01'
 
@@ -85,8 +86,8 @@ async function main() {
   const contas = [
     ['Cartão Amazon', 'cartao_credito', 'Compartilhado', '#ff9900'],
     ['Cartão Mercado Pago', 'cartao_credito', 'Compartilhado', '#00b1ea'],
-    ['Cartão da Alê', 'cartao_credito', 'Compartilhado', '#7c3aed'],
-    ['Inter - Pessoa A', 'cartao_credito', 'Pessoa A', '#ff7a00'],
+    ['Cartão Compartilhado', 'cartao_credito', 'Compartilhado', '#7c3aed'],
+    ['Conta Pessoa A', 'cartao_credito', 'Pessoa A', '#ff7a00'],
     ['Nubank - Pessoa B', 'cartao_credito', 'Pessoa B', '#820ad1'],
     ['Nubank - Pessoa A', 'cartao_credito', 'Pessoa A', '#820ad1'],
     ['Nubank - Pessoa C', 'cartao_credito', 'Pessoa C', '#820ad1'],
@@ -141,8 +142,8 @@ async function main() {
       'Colchão de segurança — ~6 meses de custos.'],
     ['Carteira de Investimentos', 'investimento', 100000, '2027-12-01', '#10b981', 'trending-up',
       'Acumular aportes mensais e ver o patrimônio crescer.'],
-    ['Quitar Empréstimo Mercado Pago', 'quitacao_divida', round2(366.64 * 12), '2026-12-01', '#f43f5e', 'credit-card',
-      'Sair da dívida do empréstimo (12 parcelas de R$ 366,64).'],
+    ['Quitar Empréstimo', 'quitacao_divida', round2(300 * 12), '2026-12-01', '#f43f5e', 'credit-card',
+      'Sair da dívida do empréstimo (12 parcelas de R$ 300).'],
   ]
   const metaId = {}
   for (const [nome, tipo, alvo, dataAlvo, cor, icone, desc] of metas) {
@@ -155,7 +156,7 @@ async function main() {
   console.log(`✓ ${metas.length} metas`)
 
   // ---------- import do CSV ----------
-  const csvPath = join(ROOT, 'CONTROLE FINANCEIRO(JULHO).csv')
+  const csvPath = join(__dirname, 'sample-financeiro.csv')
   const { transacoes, totaisConta, salario } = parseFinanceCsv(csvPath)
 
   const RECORR = /aluguel|condominio|\bluz\b|internet|academia|muay|natacao|terapia|ingles|canva|previdencia|investimento|impostos|google one|mounjaro|globoplay|chat gpt|chatgpt|claude/i
@@ -199,7 +200,7 @@ async function main() {
   const orcFixos = {
     Mercado: 1000, Roupas: 500, Moradia: 1497, Lazer: 500,
     'Mesada Pessoa A': 500, 'Mesada Pessoa B': 500,
-    Investimento: 5000, Previdência: 320, Impostos: 1200, Empréstimo: 366.64,
+    Investimento: 5000, Previdência: 320, Impostos: 1200, Empréstimo: 300,
   }
   // categorias inferidas: orçamento = gasto real arredondado p/ cima (passo 50, mín 100)
   const gastoPorCat = {}
@@ -220,12 +221,12 @@ async function main() {
   // ---------- renda prevista (padrão recorrente) ----------
   await client.query(
     'insert into rendas (mes_referencia, valor, recorrente) values ($1, $2, true) on conflict (mes_referencia) do nothing',
-    [MES, 21000]
+    [MES, salario ?? 8000]
   )
   console.log('✓ renda prevista padrão')
 
   // ---------- meta de quitação: valor_atual = parcelas já pagas ----------
-  await client.query('update metas set valor_atual = $1 where id = $2', [round2(366.64 * 7), metaId['Quitar Empréstimo Mercado Pago']])
+  await client.query('update metas set valor_atual = $1 where id = $2', [round2(300 * 3), metaId['Quitar Empréstimo']])
 
   // ---------- verificação: totais por conta ----------
   const somaConta = await client.query(

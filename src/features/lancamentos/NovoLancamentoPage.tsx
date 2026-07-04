@@ -354,7 +354,12 @@ export function NovoLancamentoPage() {
                 </div>
               </div>
               {modo === 'B' && (
-                <p className="text-sm text-muted-foreground">≈ <b className="text-foreground">{money(parcelaCalculada)}</b> por parcela</p>
+                <p className="text-sm text-muted-foreground">
+                  ≈ <b className="text-foreground">{money(parcelaCalculada)}</b> por parcela
+                  {parcelaTotal > 0 && Math.round(valorTotal * 100) % parcelaTotal !== 0 && (
+                    <span> · a última ajusta os centavos</span>
+                  )}
+                </p>
               )}
             </div>
           )}

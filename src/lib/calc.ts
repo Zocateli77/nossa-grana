@@ -557,11 +557,18 @@ export function expandirSerie(base: BaseSerie, grupoId: string): NovoLancamento[
     const atual = base.parcela_atual ?? 1
     const total = base.parcela_total as number
     const primeira = base.data_primeira_parcela ?? iso(addMonths(parseISO(base.data), -(atual - 1)))
+    // Ajuste de centavos: quando o valor total é conhecido e a série é gerada do
+    // início, cada parcela é round2(total/n) e a ÚLTIMA absorve a diferença — assim
+    // a soma fecha exatamente o total (ex: 1000/3 → 333,33 + 333,33 + 333,34).
+    const ajustaCentavos = base.valor_total != null && atual === 1
+    const porParcela = ajustaCentavos ? round2(Number(base.valor_total) / total) : base.valor
+    const ultima = ajustaCentavos ? round2(Number(base.valor_total) - porParcela * (total - 1)) : base.valor
     const rows: NovoLancamento[] = []
     for (let k = atual; k <= total; k++) {
       const data = iso(addMonths(parseISO(base.data), k - atual))
       rows.push({
         ...comum,
+        valor: k === total ? ultima : porParcela,
         // só a 1ª ocorrência mantém o vínculo com a meta (as futuras não pré-creditam)
         meta_id: k === atual ? base.meta_id : null,
         data,

@@ -232,7 +232,7 @@ export function useSalvarOrcamento() {
     }) => {
       const { data, error } = await supabase
         .from('orcamentos')
-        .upsert(input, { onConflict: 'categoria_id,mes_referencia' })
+        .upsert(input, { onConflict: 'workspace_id,categoria_id,mes_referencia' })
         .select()
         .single()
       if (error) throw error
@@ -272,7 +272,7 @@ export function useSalvarRenda() {
     mutationFn: async (input: { mes_referencia: string; valor: number; recorrente?: boolean }) => {
       const { data, error } = await supabase
         .from('rendas')
-        .upsert(input, { onConflict: 'mes_referencia' })
+        .upsert(input, { onConflict: 'workspace_id,mes_referencia' })
         .select()
         .single()
       if (error) throw error

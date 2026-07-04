@@ -1,7 +1,72 @@
 -- =====================================================================
---  Nossa Grana — schema (Seção 4 da spec) + RLS + triggers
+--  Nossa Grana — schema (Seção 4 da spec) + RLS + triggers + multi-tenant
 --  Idempotente: pode rodar várias vezes sem quebrar.
 -- =====================================================================
+
+-- ---------------------------------------------------------------------
+--  0) Workspaces / multi-tenant
+-- ---------------------------------------------------------------------
+create table if not exists workspaces (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null,
+  criado_por uuid references auth.users(id),
+  criado_em timestamptz default now()
+);
+
+create table if not exists workspace_members (
+  workspace_id uuid references workspaces(id) on delete cascade,
+  user_id uuid references auth.users(id) on delete cascade,
+  papel text not null default 'membro' check (papel in ('dono', 'membro')),
+  criado_em timestamptz default now(),
+  primary key (workspace_id, user_id)
+);
+
+create index if not exists idx_ws_members_user on workspace_members (user_id);
+
+create table if not exists profiles (
+  user_id uuid primary key references auth.users(id) on delete cascade,
+  active_workspace_id uuid references workspaces(id),
+  nome text,
+  criado_em timestamptz default now()
+);
+
+create table if not exists workspace_invites (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references workspaces(id) on delete cascade not null,
+  email text not null,
+  token uuid default gen_random_uuid(),
+  papel text not null default 'membro' check (papel in ('dono', 'membro')),
+  status text not null default 'pendente' check (status in ('pendente', 'aceito', 'revogado')),
+  convidado_por uuid references auth.users(id),
+  criado_em timestamptz default now()
+);
+
+create index if not exists idx_ws_invites_email on workspace_invites (email);
+create index if not exists idx_ws_invites_ws on workspace_invites (workspace_id);
+
+-- colunas idempotentes (bancos com tabelas criadas parcialmente)
+alter table workspace_members add column if not exists papel text not null default 'membro';
+alter table workspace_members add column if not exists criado_em timestamptz default now();
+alter table workspace_invites add column if not exists papel text not null default 'membro';
+alter table workspace_invites add column if not exists status text not null default 'pendente';
+alter table workspace_invites add column if not exists token uuid default gen_random_uuid();
+alter table workspace_invites add column if not exists convidado_por uuid references auth.users(id);
+alter table profiles add column if not exists nome text;
+alter table profiles add column if not exists active_workspace_id uuid references workspaces(id);
+alter table workspaces add column if not exists criado_por uuid references auth.users(id);
+alter table workspaces add column if not exists nome text;
+alter table workspaces add column if not exists criado_em timestamptz default now();
+update workspaces set nome = coalesce(nome, name, 'Meu espaço') where nome is null;
+
+-- relaxa NOT NULL legado para permitir inserts só com nome
+do $$
+begin
+  if exists (select 1 from information_schema.columns where table_schema='public' and table_name='workspaces' and column_name='name') then
+    alter table workspaces alter column name drop not null;
+    alter table workspaces alter column slug drop not null;
+  end if;
+exception when others then null;
+end $$;
 
 -- 1) Pessoas
 create table if not exists pessoas (
@@ -137,6 +202,268 @@ create index if not exists idx_desejos_categoria on desejos (categoria_id);
 create index if not exists idx_desejos_conta on desejos (conta_id);
 
 -- ---------------------------------------------------------------------
+--  workspace_id nas tabelas de negócio (idempotente)
+-- ---------------------------------------------------------------------
+do $$
+declare t text;
+begin
+  foreach t in array array['pessoas','categorias','contas','metas','orcamentos','rendas','lancamentos','desejos'] loop
+    execute format('alter table %I add column if not exists workspace_id uuid references workspaces(id) on delete cascade', t);
+    execute format('create index if not exists idx_%s_workspace on %I (workspace_id)', t, t);
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------
+--  Constraints únicas por workspace (migração idempotente)
+-- ---------------------------------------------------------------------
+do $$
+begin
+  -- rendas: unique (mes_referencia) -> unique (workspace_id, mes_referencia)
+  if exists (
+    select 1 from pg_constraint
+    where conrelid = 'rendas'::regclass and contype = 'u'
+      and pg_get_constraintdef(oid) like '%mes_referencia%'
+      and pg_get_constraintdef(oid) not like '%workspace_id%'
+  ) then
+    alter table rendas drop constraint if exists rendas_mes_referencia_key;
+    -- tenta nome genérico também
+    execute (
+      select 'alter table rendas drop constraint ' || quote_ident(conname)
+      from pg_constraint
+      where conrelid = 'rendas'::regclass and contype = 'u'
+        and pg_get_constraintdef(oid) like '%mes_referencia%'
+        and pg_get_constraintdef(oid) not like '%workspace_id%'
+      limit 1
+    );
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'rendas'::regclass and contype = 'u'
+      and pg_get_constraintdef(oid) like '%workspace_id%mes_referencia%'
+  ) then
+    alter table rendas add constraint rendas_workspace_mes_unique unique (workspace_id, mes_referencia);
+  end if;
+
+  -- orcamentos: unique (categoria_id, mes_referencia) -> unique (workspace_id, categoria_id, mes_referencia)
+  if exists (
+    select 1 from pg_constraint
+    where conrelid = 'orcamentos'::regclass and contype = 'u'
+      and pg_get_constraintdef(oid) like '%categoria_id%mes_referencia%'
+      and pg_get_constraintdef(oid) not like '%workspace_id%'
+  ) then
+    alter table orcamentos drop constraint if exists orcamentos_categoria_id_mes_referencia_key;
+    execute (
+      select 'alter table orcamentos drop constraint ' || quote_ident(conname)
+      from pg_constraint
+      where conrelid = 'orcamentos'::regclass and contype = 'u'
+        and pg_get_constraintdef(oid) like '%categoria_id%mes_referencia%'
+        and pg_get_constraintdef(oid) not like '%workspace_id%'
+      limit 1
+    );
+  end if;
+  if not exists (
+    select 1 from pg_constraint
+    where conrelid = 'orcamentos'::regclass and contype = 'u'
+      and pg_get_constraintdef(oid) like '%workspace_id%categoria_id%mes_referencia%'
+  ) then
+    alter table orcamentos add constraint orcamentos_workspace_cat_mes_unique unique (workspace_id, categoria_id, mes_referencia);
+  end if;
+exception when others then
+  raise notice 'Constraint migration skipped: %', sqlerrm;
+end $$;
+
+-- ---------------------------------------------------------------------
+--  Contexto de workspace ativo
+-- ---------------------------------------------------------------------
+create or replace function current_workspace_id() returns uuid
+language sql stable security definer set search_path = public as $$
+  select active_workspace_id from profiles where user_id = auth.uid()
+$$;
+
+create or replace function user_is_workspace_member(ws_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from workspace_members wm
+    where wm.workspace_id = ws_id and wm.user_id = auth.uid()
+  )
+$$;
+
+create or replace function user_is_workspace_dono(ws_id uuid) returns boolean
+language sql stable security definer set search_path = public as $$
+  select exists (
+    select 1 from workspace_members wm
+    where wm.workspace_id = ws_id and wm.user_id = auth.uid() and wm.papel = 'dono'
+  )
+$$;
+
+-- ---------------------------------------------------------------------
+--  Trigger: preenche workspace_id automaticamente no INSERT
+-- ---------------------------------------------------------------------
+create or replace function set_workspace_id() returns trigger
+language plpgsql as $$
+begin
+  if new.workspace_id is null then
+    new.workspace_id := current_workspace_id();
+  end if;
+  return new;
+end;
+$$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['pessoas','categorias','contas','metas','orcamentos','rendas','lancamentos','desejos'] loop
+    execute format('drop trigger if exists trg_set_workspace_id on %I', t);
+    execute format(
+      'create trigger trg_set_workspace_id before insert on %I for each row execute function set_workspace_id()', t);
+  end loop;
+end $$;
+
+-- ---------------------------------------------------------------------
+--  Seed padrão de um workspace (pessoas + categorias)
+-- ---------------------------------------------------------------------
+create or replace function seed_workspace_defaults(ws_id uuid) returns void
+language plpgsql security definer set search_path = public as $$
+declare
+  p_compartilhado uuid;
+begin
+  insert into pessoas (nome, cor, workspace_id) values
+    ('Pessoa A', '#0ea5e9', ws_id),
+    ('Pessoa B', '#ec4899', ws_id),
+    ('Compartilhado', '#14b8a6', ws_id)
+  on conflict do nothing;
+
+  select id into p_compartilhado from pessoas where workspace_id = ws_id and nome = 'Compartilhado' limit 1;
+
+  insert into categorias (nome, grupo, tipo_reserva, dono_id, cor, icone, workspace_id) values
+    ('Mercado', 'essencial', 'gasto', null, '#22c55e', 'shopping-cart', ws_id),
+    ('Roupas', 'pessoal', 'gasto', null, '#f472b6', 'shirt', ws_id),
+    ('Moradia', 'essencial', 'gasto', null, '#6366f1', 'home', ws_id),
+    ('Saúde', 'saude', 'gasto', null, '#ef4444', 'heart-pulse', ws_id),
+    ('Educação', 'educacao', 'gasto', null, '#3b82f6', 'graduation-cap', ws_id),
+    ('Assinaturas', 'assinaturas', 'gasto', null, '#a855f7', 'repeat', ws_id),
+    ('Pets', 'pets', 'gasto', null, '#f59e0b', 'paw-print', ws_id),
+    ('Lazer', 'lazer', 'gasto', null, '#06b6d4', 'party-popper', ws_id),
+    ('Cuidados Pessoais', 'pessoal', 'gasto', null, '#ec4899', 'sparkles', ws_id),
+    ('Investimento', 'investimento', 'investimento', null, '#10b981', 'trending-up', ws_id),
+    ('Previdência', 'investimento', 'investimento', null, '#14b8a6', 'piggy-bank', ws_id),
+    ('Impostos', 'imposto', 'imposto', null, '#64748b', 'landmark', ws_id),
+    ('Empréstimo', 'divida', 'gasto', null, '#f43f5e', 'credit-card', ws_id),
+    ('A classificar', 'outro', 'gasto', null, '#94a3b8', 'circle-help', ws_id);
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+--  Provisiona workspace (compatível com schema legado name/slug/role)
+-- ---------------------------------------------------------------------
+create or replace function provision_workspace(p_user_id uuid, p_nome text default 'Meu espaço')
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  ws_id uuid := gen_random_uuid();
+  slug_val text;
+  has_name boolean;
+  has_role boolean;
+  has_member_id boolean;
+  has_joined_at boolean;
+begin
+  slug_val := lower(regexp_replace(p_nome, '[^a-zA-Z0-9]+', '-', 'g')) || '-' || left(ws_id::text, 8);
+
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'workspaces' and column_name = 'name'
+  ) into has_name;
+
+  if has_name then
+    execute
+      'insert into workspaces (id, nome, name, slug, criado_por, created_at, criado_em)
+       values ($1, $2, $2, $3, $4, now(), now())'
+      using ws_id, p_nome, slug_val, p_user_id;
+  else
+    insert into workspaces (id, nome, criado_por, criado_em)
+      values (ws_id, p_nome, p_user_id, now());
+  end if;
+
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'workspace_members' and column_name = 'role'
+  ) into has_role;
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'workspace_members' and column_name = 'id'
+  ) into has_member_id;
+  select exists (
+    select 1 from information_schema.columns
+    where table_schema = 'public' and table_name = 'workspace_members' and column_name = 'joined_at'
+  ) into has_joined_at;
+
+  if has_role and has_member_id then
+    execute
+      'insert into workspace_members (id, workspace_id, user_id, papel, role, joined_at)
+       values ($1, $2, $3, ''dono'', ''admin''::member_role, now())'
+      using gen_random_uuid(), ws_id, p_user_id;
+  elsif has_member_id and has_joined_at then
+    execute
+      'insert into workspace_members (id, workspace_id, user_id, papel, joined_at)
+       values ($1, $2, $3, ''dono'', now())'
+      using gen_random_uuid(), ws_id, p_user_id;
+  elsif has_member_id then
+    execute
+      'insert into workspace_members (id, workspace_id, user_id, papel, criado_em)
+       values ($1, $2, $3, ''dono'', now())'
+      using gen_random_uuid(), ws_id, p_user_id;
+  else
+    insert into workspace_members (workspace_id, user_id, papel, criado_em)
+      values (ws_id, p_user_id, 'dono', now());
+  end if;
+
+  insert into profiles (user_id, active_workspace_id, nome)
+    values (
+      p_user_id,
+      ws_id,
+      coalesce(
+        (select raw_user_meta_data->>'nome' from auth.users where id = p_user_id),
+        split_part((select email from auth.users where id = p_user_id), '@', 1)
+      )
+    )
+    on conflict (user_id) do update set active_workspace_id = excluded.active_workspace_id;
+
+  perform seed_workspace_defaults(ws_id);
+  return ws_id;
+end;
+$$;
+
+-- ---------------------------------------------------------------------
+--  Provisionamento no signup (trigger em auth.users)
+-- ---------------------------------------------------------------------
+create or replace function handle_new_user() returns trigger
+language plpgsql security definer set search_path = public as $$
+declare
+  ws uuid;
+  inv record;
+begin
+  ws := provision_workspace(new.id, 'Meu espaço');
+
+  -- aceita convites pendentes para o e-mail do novo usuário
+  for inv in
+    select id, workspace_id, papel from workspace_invites
+    where lower(email) = lower(new.email) and status = 'pendente'
+  loop
+    insert into workspace_members (workspace_id, user_id, papel)
+      values (inv.workspace_id, new.id, inv.papel)
+      on conflict do nothing;
+    update workspace_invites set status = 'aceito' where id = inv.id;
+  end loop;
+
+  return new;
+end;
+$$;
+
+drop trigger if exists on_auth_user_created on auth.users;
+create trigger on_auth_user_created
+  after insert on auth.users
+  for each row execute function handle_new_user();
+
+-- ---------------------------------------------------------------------
 --  Trigger: recalcula metas.valor_atual a partir dos aportes (5.7)
 -- ---------------------------------------------------------------------
 create or replace function recalc_meta_valor_atual() returns trigger as $$
@@ -193,18 +520,80 @@ create trigger trg_atualizado_em_desejos
   for each row execute function set_atualizado_em();
 
 -- ---------------------------------------------------------------------
---  RLS — app doméstico do casal: usuário autenticado acessa tudo
+--  RLS — isolamento por workspace
 -- ---------------------------------------------------------------------
 do $$
 declare t text;
 begin
+  -- tabelas de negócio
   foreach t in array array['pessoas','categorias','contas','metas','orcamentos','lancamentos','rendas','desejos'] loop
     execute format('alter table %I enable row level security', t);
     execute format('drop policy if exists casal_full_access on %I', t);
+    execute format('drop policy if exists ws_isolation on %I', t);
     execute format(
-      'create policy casal_full_access on %I for all to authenticated using (true) with check (true)', t);
+      'create policy ws_isolation on %I for all to authenticated
+       using (workspace_id = current_workspace_id())
+       with check (workspace_id = current_workspace_id())', t);
   end loop;
 end $$;
+
+-- workspaces
+alter table workspaces enable row level security;
+drop policy if exists ws_member_select on workspaces;
+create policy ws_member_select on workspaces for select to authenticated
+  using (user_is_workspace_member(id));
+drop policy if exists ws_member_update on workspaces;
+create policy ws_member_update on workspaces for update to authenticated
+  using (user_is_workspace_dono(id))
+  with check (user_is_workspace_dono(id));
+
+-- workspace_members
+alter table workspace_members enable row level security;
+drop policy if exists ws_members_select on workspace_members;
+create policy ws_members_select on workspace_members for select to authenticated
+  using (user_is_workspace_member(workspace_id));
+drop policy if exists ws_members_insert on workspace_members;
+-- Segurança: NÃO permitir auto-inserção livre (or user_id = auth.uid()).
+-- Isso deixava qualquer usuário autenticado virar "membro" de qualquer workspace
+-- cujo UUID conhecesse, e então ler/escrever os dados daquele workspace.
+-- Só o dono pode adicionar membros, ou o próprio usuário SE houver convite
+-- pendente endereçado ao e-mail dele naquele workspace.
+create policy ws_members_insert on workspace_members for insert to authenticated
+  with check (
+    user_is_workspace_dono(workspace_id)
+    or (
+      user_id = auth.uid()
+      and exists (
+        select 1 from workspace_invites wi
+        where wi.workspace_id = workspace_members.workspace_id
+          and lower(wi.email) = lower(auth.jwt() ->> 'email')
+          and wi.status = 'pendente'
+      )
+    )
+  );
+
+-- profiles
+alter table profiles enable row level security;
+drop policy if exists profiles_own on profiles;
+create policy profiles_own on profiles for all to authenticated
+  using (user_id = auth.uid())
+  with check (
+    user_id = auth.uid()
+    and (active_workspace_id is null or user_is_workspace_member(active_workspace_id))
+  );
+
+-- workspace_invites
+alter table workspace_invites enable row level security;
+drop policy if exists ws_invites_dono on workspace_invites;
+create policy ws_invites_dono on workspace_invites for all to authenticated
+  using (
+    user_is_workspace_dono(workspace_id)
+    or (lower(email) = lower(auth.jwt() ->> 'email') and status = 'pendente')
+  )
+  with check (
+    user_is_workspace_dono(workspace_id)
+    or (lower(email) = lower(auth.jwt() ->> 'email') and status in ('pendente', 'aceito'))
+  );
 
 -- ---------------------------------------------------------------------
 --  Realtime (opcional) — lancamentos e metas

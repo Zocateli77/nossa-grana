@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
+import { useWorkspace } from '@/contexts/WorkspaceContext'
 import { useApp } from '@/contexts/AppContext'
 import { useLancamentos } from '@/hooks/useDados'
 import { useReabastecerRecorrencias } from '@/hooks/useMutations'
@@ -86,8 +87,17 @@ function AppAutenticado() {
 }
 
 export default function App() {
-  const { session, carregando } = useAuth()
-  if (carregando) return <TelaCarregando />
+  const { session, carregando: authCarregando } = useAuth()
+  const { carregando: wsCarregando, workspaceAtivo } = useWorkspace()
+  if (authCarregando) return <TelaCarregando />
   if (!session) return <LoginPage />
+  if (wsCarregando) return <TelaCarregando />
+  if (!workspaceAtivo) {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-4">
+        <p className="text-muted-foreground text-center">Nenhum espaço encontrado. Tente sair e entrar novamente.</p>
+      </div>
+    )
+  }
   return <AppAutenticado />
 }

@@ -356,6 +356,29 @@ export function useSalvarCategoria() {
   })
 }
 
+/** Marca um lançamento previsto como pago (com atualização otimista). */
+export function useMarcarPago() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('lancamentos').update({ status: 'pago', pago: true }).eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ['lancamentos'] })
+      const prev = qc.getQueryData<Lancamento[]>(['lancamentos'])
+      qc.setQueryData<Lancamento[]>(['lancamentos'], (old) =>
+        old?.map((l) => (l.id === id ? { ...l, status: 'pago', pago: true } : l))
+      )
+      return { prev }
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['lancamentos'], ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['lancamentos'] }),
+  })
+}
+
 export function useSalvarConta() {
   const invalidate = useInvalidate()
   return useMutation({

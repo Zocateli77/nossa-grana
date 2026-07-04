@@ -1011,6 +1011,45 @@ export function faturaAPagar(lancamentos: Lancamento[], conta: Conta, hoje: Date
   return f && f.estado === 'fechada' && f.total > 0 ? f : null
 }
 
+// ------------------------------------------------------------------
+//  Contas do mês — agenda de contas a pagar (lançamentos previstos)
+// ------------------------------------------------------------------
+
+/** Tipos de lançamento que representam algo a pagar. */
+const TIPOS_A_PAGAR: TipoLancamento[] = ['despesa', 'imposto', 'emprestimo']
+
+export interface ContaAPagar {
+  lancamento: Lancamento
+  vencida: boolean
+}
+
+export interface ContasDoMes {
+  itens: ContaAPagar[]
+  total: number
+  totalVencido: number
+  qtdVencida: number
+}
+
+/**
+ * Contas a pagar do mês: lançamentos `previsto` (não quitados) de tipos que se
+ * paga, ordenados por data. Marca como vencida quando a data já passou de hoje.
+ */
+export function contasDoMes(lancamentos: Lancamento[], mesRef: string, hoje: Date = new Date()): ContasDoMes {
+  const hojeISO = iso(hoje)
+  const itens = lancamentos
+    .filter((l) => l.status === 'previsto' && TIPOS_A_PAGAR.includes(l.tipo) && noMes(l.data, mesRef))
+    .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0))
+    .map((l) => ({ lancamento: l, vencida: l.data < hojeISO }))
+  const total = round2(itens.reduce((s, x) => s + Number(x.lancamento.valor), 0))
+  const vencidas = itens.filter((x) => x.vencida)
+  return {
+    itens,
+    total,
+    totalVencido: round2(vencidas.reduce((s, x) => s + Number(x.lancamento.valor), 0)),
+    qtdVencida: vencidas.length,
+  }
+}
+
 export interface FaturaAVencer {
   conta: Conta
   fatura: FaturaInfo

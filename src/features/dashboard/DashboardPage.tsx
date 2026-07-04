@@ -20,6 +20,7 @@ import {
 import { money, pct, dataCurta } from '@/lib/format'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { EnvelopeCard } from '@/components/EnvelopeCard'
+import { ContasDoMesCard } from '@/components/ContasDoMesCard'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
 import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Progress } from '@/components/ui/progress'
@@ -138,6 +139,9 @@ export function DashboardPage() {
         <MiniStat titulo="Investido" valor={real.investido} cor="text-success" />
         <MiniStat titulo="Sobra" valor={real.saldoReal} cor={real.saldoReal >= 0 ? 'text-success' : 'text-destructive'} />
       </div>
+
+      {/* Contas do mês — agenda de contas a pagar */}
+      <ContasDoMesCard lancamentos={dados.lancamentos} mesRef={mesRef} catMap={catMap} />
 
       {/* Com o que você gastou — por categoria */}
       {topCategorias.length > 0 && (

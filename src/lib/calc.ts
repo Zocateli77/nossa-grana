@@ -17,6 +17,8 @@ export interface Dados {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+/** Formata em BRL para textos gerados aqui (insights). Sem acoplar com a UI. */
+const moneyBr = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 /**
  * Status padrão de um novo lançamento:
@@ -457,6 +459,68 @@ export function gastosPorCategoria(dados: Dados, mesRef: string): GastoCategoria
     out.push({ categoria, total: val, pct: total > 0 ? val / total : 0 })
   }
   return out.sort((a, b) => b.total - a.total)
+}
+
+// ------------------------------------------------------------------
+//  Insights do mês — regras puras (sem IA), comparando com a média recente
+// ------------------------------------------------------------------
+
+export type SeveridadeInsight = 'alerta' | 'positivo' | 'info'
+
+export interface Insight {
+  id: string
+  severidade: SeveridadeInsight
+  texto: string
+}
+
+/** Média de gasto de uma categoria nos N meses anteriores a mesRef. */
+function mediaCategoriaMeses(lancamentos: Lancamento[], categoriaId: string, mesRef: string, n = 3): number {
+  let soma = 0
+  for (let i = 1; i <= n; i++) soma += gastoCategoriaMes(lancamentos, categoriaId, navegarMes(mesRef, -i))
+  return round2(soma / n)
+}
+
+/**
+ * Gera insights acionáveis do mês comparando o gasto por categoria com a média
+ * dos 3 meses anteriores. Alertas (gastando mais) primeiro, depois um reforço
+ * positivo (economia). Regras têm piso em reais p/ evitar ruído. Máx. 3.
+ */
+export function insightsDoMes(dados: Dados, mesRef: string): Insight[] {
+  const PISO = 50 // ignora variações pequenas (ruído)
+  const alertas: (Insight & { peso: number })[] = []
+  const positivos: (Insight & { peso: number })[] = []
+
+  for (const cat of dados.categorias) {
+    if (cat.tipo_reserva !== 'gasto') continue
+    const atual = gastoCategoriaMes(dados.lancamentos, cat.id, mesRef)
+    const media = mediaCategoriaMeses(dados.lancamentos, cat.id, mesRef)
+    if (media < PISO) continue // sem histórico relevante p/ comparar
+    const diff = round2(atual - media)
+    const pctVar = media > 0 ? diff / media : 0
+
+    if (diff >= PISO && pctVar >= 0.25) {
+      alertas.push({
+        id: `alta-${cat.id}`,
+        severidade: 'alerta',
+        texto: `Você já gastou ${Math.round(pctVar * 100)}% a mais em ${cat.nome} que sua média (${moneyBr(diff)} a mais).`,
+        peso: diff,
+      })
+    } else if (-diff >= PISO && pctVar <= -0.25) {
+      positivos.push({
+        id: `baixa-${cat.id}`,
+        severidade: 'positivo',
+        texto: `Você gastou ${moneyBr(-diff)} a menos em ${cat.nome} que sua média. 👏`,
+        peso: -diff,
+      })
+    }
+  }
+
+  alertas.sort((a, b) => b.peso - a.peso)
+  positivos.sort((a, b) => b.peso - a.peso)
+  // alertas primeiro (mais acionáveis); completa com 1 reforço positivo se sobra espaço
+  const escolhidos = alertas.slice(0, 3)
+  if (escolhidos.length < 3 && positivos.length > 0) escolhidos.push(positivos[0])
+  return escolhidos.slice(0, 3).map(({ peso: _peso, ...ins }) => ins)
 }
 
 /** As N maiores despesas individuais do mês. */

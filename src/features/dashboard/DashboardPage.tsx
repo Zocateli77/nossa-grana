@@ -21,6 +21,7 @@ import { money, pct, dataCurta } from '@/lib/format'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { EnvelopeCard } from '@/components/EnvelopeCard'
 import { ContasDoMesCard } from '@/components/ContasDoMesCard'
+import { InsightsCard } from '@/components/InsightsCard'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
 import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Progress } from '@/components/ui/progress'
@@ -142,6 +143,9 @@ export function DashboardPage() {
 
       {/* Contas do mês — agenda de contas a pagar */}
       <ContasDoMesCard lancamentos={dados.lancamentos} mesRef={mesRef} catMap={catMap} />
+
+      {/* Insights — comparação com a média recente */}
+      <InsightsCard dados={dados} mesRef={mesRef} />
 
       {/* Com o que você gastou — por categoria */}
       {topCategorias.length > 0 && (

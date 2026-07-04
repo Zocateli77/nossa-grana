@@ -66,7 +66,8 @@ const gastoCategoriaMes = (lancs, categId, mesRef) =>
 
 export async function coletarDados(client, { hoje, loginEmail }) {
   const diaSemana = new Date(`${hoje}T12:00:00-03:00`).getDay()
-  const mesRef = mesRefDe(hoje)
+  // Relatório é sempre PLANEJANDO o próximo mês (em julho, fala de agosto).
+  const mesRef = navegarMes(mesRefDe(hoje), 1)
 
   // workspace do casal = active_workspace_id do login informado (fallback: 1º com dados)
   let ws = null
@@ -129,9 +130,10 @@ export async function coletarDados(client, { hoje, loginEmail }) {
     .sort((a, b) => b.pct - a.pct)
 
   // insights: categoria vs média 3 meses
+  const mesNome = MESES_PT[Number(mesRef.slice(5, 7)) - 1]
+  const mesNomeCap = mesNome.charAt(0).toUpperCase() + mesNome.slice(1)
   const PISO = 50
   const alertas = []
-  const positivos = []
   for (const c of categorias) {
     if (c.tipo_reserva !== 'gasto') continue
     const atual = gastoCategoriaMes(lancamentos, c.id, mesRef)
@@ -141,16 +143,13 @@ export async function coletarDados(client, { hoje, loginEmail }) {
     if (media < PISO) continue
     const diff = round2(atual - media)
     const pctVar = media > 0 ? diff / media : 0
+    // Planejamento: só alertamos quando o mês JÁ tem mais comprometido que a média.
     if (diff >= PISO && pctVar >= 0.25) {
-      alertas.push({ tipo: 'alerta', texto: `Você já gastou ${Math.round(pctVar * 100)}% a mais em ${c.nome} que sua média (${brl(diff)} a mais).`, peso: diff })
-    } else if (-diff >= PISO && pctVar <= -0.25) {
-      positivos.push({ tipo: 'positivo', texto: `Você gastou ${brl(-diff)} a menos em ${c.nome} que sua média. 👏`, peso: -diff })
+      alertas.push({ tipo: 'alerta', texto: `${mesNomeCap} já tem ${Math.round(pctVar * 100)}% a mais comprometido em ${c.nome} que sua média (${brl(diff)} a mais).`, peso: diff })
     }
   }
   alertas.sort((a, b) => b.peso - a.peso)
-  positivos.sort((a, b) => b.peso - a.peso)
   const insights = alertas.slice(0, 3)
-  if (insights.length < 3 && positivos.length) insights.push(positivos[0])
 
   // maiores gastos do mês
   const maiores = despesas
@@ -167,7 +166,8 @@ export async function coletarDados(client, { hoje, loginEmail }) {
   return {
     dia: DIAS_PT[diaSemana],
     dataExtenso: `${Number(hoje.slice(8, 10))} de ${MESES_PT[Number(hoje.slice(5, 7)) - 1]} de ${hoje.slice(0, 4)}`,
-    mesNome: MESES_PT[Number(mesRef.slice(5, 7)) - 1],
+    mesNome,
+    mesNomeCap,
     secoes: secoesDoDia(diaSemana),
     resumo: { renda, gasto, jaPago, previsto, investido, impostos, sobra, pctRenda },
     envelopes,

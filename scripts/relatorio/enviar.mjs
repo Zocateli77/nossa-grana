@@ -89,7 +89,7 @@ async function main() {
   }
 
   const html = gerarHtml(dados)
-  const subject = `Nossa Grana — ${dados.dia}, ${dados.dataExtenso}`
+  const subject = `Nossa Grana — Planejando ${dados.mesNomeCap} (${dados.dia})`
 
   if (DRY) {
     const out = join(ROOT, 'scripts', 'relatorio', 'preview.html')

@@ -49,12 +49,16 @@ function statCell(label, valor, cor = C.text) {
 function resumoBloco(r) {
   const pctTxt = r.renda > 0 ? `${Math.round(r.pctRenda * 100)}% da renda` : 'defina sua renda'
   const sobraCor = r.sobra >= 0 ? C.success : C.danger
+  const partes = []
+  if (r.gasto > 0) partes.push(`${brl(r.gasto)} agendado`)
+  if (r.jaPago > 0) partes.push(`${brl(r.jaPago)} já pago`)
+  if (r.investido > 0) partes.push(`investir ${brl(r.investido)}`)
   return `
     <table width="100%" cellpadding="0" cellspacing="0" style="border-collapse:separate;">
       <tr>
-        ${statCell('Renda', brl(r.renda))}
-        ${statCell('Gasto', brl(r.gasto), r.pctRenda >= 1 ? C.danger : C.text)}
-        ${statCell('Sobra', brl(r.sobra), sobraCor)}
+        ${statCell('Renda prevista', brl(r.renda))}
+        ${statCell('Comprometido', brl(r.gasto), r.pctRenda >= 1 ? C.danger : C.text)}
+        ${statCell('Sobra prevista', brl(r.sobra), sobraCor)}
       </tr>
     </table>
     <div style="margin-top:14px;">
@@ -62,9 +66,7 @@ function resumoBloco(r) {
         Comprometido <strong style="color:${C.text};">${brl(r.gasto)}</strong> de ${brl(r.renda)} · <strong style="color:${r.pctRenda >= 1 ? C.danger : C.text};">${pctTxt}</strong>
       </div>
       ${barra(r.pctRenda)}
-      <div style="font-size:12px;color:${C.muted};margin-top:6px;">
-        ${brl(r.jaPago)} já pago${r.previsto > 0 ? ` · ${brl(r.previsto)} a pagar` : ''}${r.investido > 0 ? ` · investido ${brl(r.investido)}` : ''}
-      </div>
+      <div style="font-size:12px;color:${C.muted};margin-top:6px;">${partes.join(' · ') || 'Nada agendado ainda.'}</div>
     </div>`
 }
 
@@ -123,7 +125,7 @@ export function gerarHtml(d) {
   const partes = [secaoTitulo(`Resumo de ${d.mesNome}`), resumoBloco(resumo)]
   if (secoes.envelopes) partes.push(secaoTitulo('Envelopes no limite'), envelopesBloco(d.envelopes))
   if (secoes.insights) partes.push(secaoTitulo('Percebi que…'), insightsBloco(d.insights))
-  if (secoes.maiores) partes.push(secaoTitulo('Maiores gastos'), maioresBloco(d.maiores))
+  if (secoes.maiores) partes.push(secaoTitulo('Maiores contas do mês'), maioresBloco(d.maiores))
 
   return `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Nossa Grana</title></head>
 <body style="margin:0;padding:0;background:${C.page};font-family:Inter,-apple-system,Segoe UI,Arial,sans-serif;">
@@ -132,8 +134,8 @@ export function gerarHtml(d) {
 <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:${C.card};border-radius:18px;overflow:hidden;border:1px solid ${C.border};box-shadow:0 6px 24px rgba(15,118,110,0.08);">
   <tr><td style="padding:28px 32px;background:linear-gradient(135deg,${C.primary},${C.primaryDark});">
     <div style="font-size:13px;color:#bfe9e2;letter-spacing:1px;text-transform:uppercase;font-weight:600;">🐷 Nossa Grana</div>
-    <div style="font-size:22px;color:#ffffff;font-weight:800;margin-top:6px;">Relatório de ${d.dia}</div>
-    <div style="font-size:13px;color:#cdeee8;margin-top:2px;">${d.dataExtenso}</div>
+    <div style="font-size:22px;color:#ffffff;font-weight:800;margin-top:6px;">Planejando ${d.mesNomeCap}</div>
+    <div style="font-size:13px;color:#cdeee8;margin-top:2px;">${d.dia} · ${d.dataExtenso}</div>
   </td></tr>
   <tr><td style="padding:8px 32px 24px;">
     ${partes.join('')}

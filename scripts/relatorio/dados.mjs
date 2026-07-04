@@ -1,0 +1,181 @@
+// Coleta o snapshot financeiro do casal para o relatório por e-mail.
+// Lê o Supabase direto (pg) e reproduz em JS a lógica de renda/envelopes/insights.
+
+const round2 = (n) => Math.round(n * 100) / 100
+
+// --- datas (sem dependências) ---
+/** Data de "hoje" no fuso de São Paulo, como 'YYYY-MM-DD'. */
+export function hojeSaoPaulo(base = new Date()) {
+  // en-CA formata como YYYY-MM-DD
+  return new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Sao_Paulo' }).format(base)
+}
+/** 1º dia do mês de uma data 'YYYY-MM-DD'. */
+export const mesRefDe = (d) => `${d.slice(0, 7)}-01`
+/** desloca um mesRef ('YYYY-MM-01') em n meses. */
+export function navegarMes(mesRef, n) {
+  const [y, m] = mesRef.split('-').map(Number)
+  const d = new Date(Date.UTC(y, m - 1 + n, 1))
+  return `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-01`
+}
+const noMes = (dataISO, mesRef) => dataISO.slice(0, 7) === mesRef.slice(0, 7)
+
+const DIAS_PT = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado']
+const MESES_PT = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
+
+/** Quais seções extras entram em cada dia da semana (0=Dom … 6=Sáb). Resumo do mês vem sempre. */
+export function secoesDoDia(diaSemana) {
+  switch (diaSemana) {
+    case 1: return { envelopes: true } // Segunda
+    case 3: return { insights: true } // Quarta
+    case 5: return { maiores: true } // Sexta
+    case 0: return { envelopes: true, insights: true, maiores: true } // Domingo — recapão
+    default: return {}
+  }
+}
+
+// --- lógica de negócio (espelha src/lib/calc.ts) ---
+function rendaEfetiva(rendas, mesRef, fallback = 0) {
+  const exato = rendas.find((r) => r.mes_referencia === mesRef)
+  if (exato) return Number(exato.valor)
+  const anterior = rendas
+    .filter((r) => r.recorrente && r.mes_referencia <= mesRef)
+    .sort((a, b) => (a.mes_referencia < b.mes_referencia ? 1 : -1))[0]
+  return anterior ? Number(anterior.valor) : fallback
+}
+
+function orcamentoRow(orcamentos, categId, mesRef) {
+  const doCat = orcamentos.filter((o) => o.categoria_id === categId)
+  const exato = doCat.find((o) => o.mes_referencia === mesRef)
+  if (exato) return exato
+  return doCat
+    .filter((o) => o.recorrente && o.mes_referencia <= mesRef)
+    .sort((a, b) => (a.mes_referencia < b.mes_referencia ? 1 : -1))[0]
+}
+
+function orcamentoEfetivo(orcamentos, categId, mesRef, renda) {
+  const row = orcamentoRow(orcamentos, categId, mesRef)
+  if (!row) return 0
+  if (row.tipo_valor === 'percentual' && row.percentual != null) {
+    return round2((Number(row.percentual) / 100) * renda)
+  }
+  return Number(row.valor_estabelecido)
+}
+
+const gastoCategoriaMes = (lancs, categId, mesRef) =>
+  lancs.filter((l) => l.categoria_id === categId && noMes(l.data, mesRef)).reduce((s, l) => s + Number(l.valor), 0)
+
+export async function coletarDados(client, { hoje, loginEmail }) {
+  const diaSemana = new Date(`${hoje}T12:00:00-03:00`).getDay()
+  const mesRef = mesRefDe(hoje)
+
+  // workspace do casal = active_workspace_id do login informado (fallback: 1º com dados)
+  let ws = null
+  const q1 = await client.query(
+    `select p.active_workspace_id from profiles p
+     join auth.users u on u.id = p.user_id
+     where lower(u.email) = lower($1) limit 1`,
+    [loginEmail]
+  )
+  ws = q1.rows[0]?.active_workspace_id
+  if (!ws) {
+    const q2 = await client.query(`select workspace_id, count(*) n from lancamentos group by workspace_id order by n desc limit 1`)
+    ws = q2.rows[0]?.workspace_id
+  }
+  if (!ws) throw new Error('Nenhum workspace encontrado')
+
+  const desde = navegarMes(mesRef, -3)
+  // pg Client não roda queries em paralelo — sequencial.
+  const cats = await client.query(`select id, nome, tipo_reserva, cor, icone from categorias where workspace_id = $1 and ativo`, [ws])
+  const rendas = await client.query(`select mes_referencia::text, valor, recorrente from rendas where workspace_id = $1`, [ws])
+  const orcs = await client.query(
+    `select categoria_id, mes_referencia::text, valor_estabelecido, tipo_valor, percentual, recorrente
+     from orcamentos where workspace_id = $1`,
+    [ws]
+  )
+  const lancs = await client.query(
+    `select id, descricao, valor, data::text, tipo, categoria_id, status, privado
+     from lancamentos where workspace_id = $1 and data >= $2`,
+    [ws, desde]
+  )
+  const categorias = cats.rows
+  const rendasR = rendas.rows.map((r) => ({ ...r, mes_referencia: r.mes_referencia.slice(0, 10) }))
+  const orcamentos = orcs.rows.map((o) => ({ ...o, mes_referencia: o.mes_referencia.slice(0, 10) }))
+  const lancamentos = lancs.rows.map((l) => ({ ...l, data: l.data.slice(0, 10) }))
+  const catMap = new Map(categorias.map((c) => [c.id, c]))
+
+  const doMes = lancamentos.filter((l) => noMes(l.data, mesRef))
+  const soma = (arr) => round2(arr.reduce((s, l) => s + Number(l.valor), 0))
+  const despesas = doMes.filter((l) => l.tipo === 'despesa' && l.status !== 'quitado')
+
+  const renda = rendaEfetiva(rendasR, mesRef)
+  const gasto = soma(despesas)
+  const jaPago = soma(despesas.filter((l) => l.status === 'pago'))
+  const previsto = soma(despesas.filter((l) => l.status === 'previsto'))
+  const investido = soma(doMes.filter((l) => l.tipo === 'investimento' && l.status !== 'quitado'))
+  const impostos = soma(doMes.filter((l) => l.tipo === 'imposto' && l.status !== 'quitado'))
+  const sobra = round2(renda - gasto - investido - impostos)
+  const pctRenda = renda > 0 ? gasto / renda : 0
+
+  // envelopes no limite (>=70%)
+  const envelopes = categorias
+    .filter((c) => c.tipo_reserva === 'gasto')
+    .map((c) => {
+      const estabelecido = orcamentoEfetivo(orcamentos, c.id, mesRef, renda)
+      const g = round2(gastoCategoriaMes(despesas, c.id, mesRef))
+      const pct = estabelecido > 0 ? g / estabelecido : g > 0 ? 1.5 : 0
+      return { nome: c.nome, cor: c.cor, estabelecido, gasto: g, pct, estourou: estabelecido > 0 && g > estabelecido }
+    })
+    .filter((e) => e.estabelecido > 0 && e.pct >= 0.7)
+    .sort((a, b) => b.pct - a.pct)
+
+  // insights: categoria vs média 3 meses
+  const PISO = 50
+  const alertas = []
+  const positivos = []
+  for (const c of categorias) {
+    if (c.tipo_reserva !== 'gasto') continue
+    const atual = gastoCategoriaMes(lancamentos, c.id, mesRef)
+    let mediaSoma = 0
+    for (let i = 1; i <= 3; i++) mediaSoma += gastoCategoriaMes(lancamentos, c.id, navegarMes(mesRef, -i))
+    const media = round2(mediaSoma / 3)
+    if (media < PISO) continue
+    const diff = round2(atual - media)
+    const pctVar = media > 0 ? diff / media : 0
+    if (diff >= PISO && pctVar >= 0.25) {
+      alertas.push({ tipo: 'alerta', texto: `Você já gastou ${Math.round(pctVar * 100)}% a mais em ${c.nome} que sua média (${brl(diff)} a mais).`, peso: diff })
+    } else if (-diff >= PISO && pctVar <= -0.25) {
+      positivos.push({ tipo: 'positivo', texto: `Você gastou ${brl(-diff)} a menos em ${c.nome} que sua média. 👏`, peso: -diff })
+    }
+  }
+  alertas.sort((a, b) => b.peso - a.peso)
+  positivos.sort((a, b) => b.peso - a.peso)
+  const insights = alertas.slice(0, 3)
+  if (insights.length < 3 && positivos.length) insights.push(positivos[0])
+
+  // maiores gastos do mês
+  const maiores = despesas
+    .slice()
+    .sort((a, b) => Number(b.valor) - Number(a.valor))
+    .slice(0, 5)
+    .map((l) => ({
+      descricao: l.privado ? 'Gasto livre' : l.descricao,
+      valor: Number(l.valor),
+      categoria: l.categoria_id ? catMap.get(l.categoria_id)?.nome ?? null : null,
+      data: l.data,
+    }))
+
+  return {
+    dia: DIAS_PT[diaSemana],
+    dataExtenso: `${Number(hoje.slice(8, 10))} de ${MESES_PT[Number(hoje.slice(5, 7)) - 1]} de ${hoje.slice(0, 4)}`,
+    mesNome: MESES_PT[Number(mesRef.slice(5, 7)) - 1],
+    secoes: secoesDoDia(diaSemana),
+    resumo: { renda, gasto, jaPago, previsto, investido, impostos, sobra, pctRenda },
+    envelopes,
+    insights,
+    maiores,
+  }
+}
+
+export function brl(n) {
+  return Number(n).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+}

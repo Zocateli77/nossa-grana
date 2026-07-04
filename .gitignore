@@ -22,3 +22,6 @@ env.Supabase.txt
 .netlify
 
 .vercel
+
+# preview do relatório por e-mail (gerado)
+scripts/relatorio/preview.html

@@ -6,6 +6,7 @@ import { queryClient } from '@/lib/queryClient'
 import { AuthProvider } from '@/contexts/AuthContext'
 import { WorkspaceProvider } from '@/contexts/WorkspaceContext'
 import { AppProvider } from '@/contexts/AppContext'
+import { ToastProvider } from '@/components/ui/toast'
 import { mesAtualRef } from '@/lib/dates'
 import App from '@/App'
 import './index.css'
@@ -16,9 +17,11 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
       <AuthProvider>
         <WorkspaceProvider>
           <AppProvider mesInicial={mesAtualRef()}>
-            <BrowserRouter>
-              <App />
-            </BrowserRouter>
+            <ToastProvider>
+              <BrowserRouter>
+                <App />
+              </BrowserRouter>
+            </ToastProvider>
           </AppProvider>
         </WorkspaceProvider>
       </AuthProvider>

@@ -3,7 +3,8 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import { Search, SlidersHorizontal, MoreVertical, Pencil, Copy, Trash2, Lock, ReceiptText, Repeat, X, HandCoins, PencilLine } from 'lucide-react'
 import { useDados } from '@/hooks/useDados'
 import { useApp } from '@/contexts/AppContext'
-import { useExcluirSerie, useSalvarLancamento, useQuitarDivida, type EscopoSerie } from '@/hooks/useMutations'
+import { useExcluirSerie, useExcluirLancamento, useReinserirLancamento, useSalvarLancamento, useQuitarDivida, type EscopoSerie } from '@/hooks/useMutations'
+import { useToast } from '@/components/ui/toast'
 import { byId, lancsDoMes, ehParcelado, parcelasFaltam, statusPadrao } from '@/lib/calc'
 import { iso } from '@/lib/dates'
 import { money, dataCurta } from '@/lib/format'
@@ -41,8 +42,11 @@ export function LancamentosPage() {
   const { mesRef } = useApp()
   const { dados, isLoading } = useDados()
   const excluir = useExcluirSerie()
+  const excluirAvulso = useExcluirLancamento()
+  const reinserir = useReinserirLancamento()
   const salvar = useSalvarLancamento()
   const quitar = useQuitarDivida()
+  const toast = useToast()
 
   const [busca, setBusca] = useState('')
   const [fTipo, setFTipo] = useState<'todos' | TipoLancamento>('todos')
@@ -54,7 +58,6 @@ export function LancamentosPage() {
   const [modoEdicao, setModoEdicao] = useState(false)
   const [acao, setAcao] = useState<Lancamento | null>(null)
   const [excluirSerieAlvo, setExcluirSerieAlvo] = useState<Lancamento | null>(null)
-  const [confirmarExclusao, setConfirmarExclusao] = useState<Lancamento | null>(null)
 
   // categoria vinda da URL (ao clicar num envelope)
   useEffect(() => {
@@ -121,13 +124,14 @@ export function LancamentosPage() {
       return
     }
     setAcao(null)
-    setConfirmarExclusao(l)
-  }
-
-  async function confirmarExclusaoAvulsa() {
-    if (!confirmarExclusao) return
-    await excluir.mutateAsync({ lancamento: confirmarExclusao, escopo: 'uma' })
-    setConfirmarExclusao(null)
+    // exclusão avulsa: remove na hora e oferece "Desfazer" (reinsere o mesmo lançamento)
+    await excluirAvulso.mutateAsync(l.id)
+    toast.mostrar({
+      mensagem: `"${l.privado ? 'Gasto livre' : l.descricao}" excluído.`,
+      acaoLabel: 'Desfazer',
+      onAcao: () => reinserir.mutate(l),
+      duracaoMs: 7000,
+    })
   }
 
   async function aplicarExclusao(escopo: EscopoSerie) {
@@ -358,33 +362,6 @@ export function LancamentosPage() {
         destrutivo
       />
 
-      <Dialog open={!!confirmarExclusao} onOpenChange={(o) => !o && setConfirmarExclusao(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Excluir lançamento?</DialogTitle>
-            <DialogDescription>
-              {confirmarExclusao && (
-                <>
-                  &quot;{confirmarExclusao.privado ? 'Gasto livre' : confirmarExclusao.descricao}&quot; ({money(confirmarExclusao.valor)}) será removido permanentemente.
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter className="flex-col gap-2 sm:flex-row">
-            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setConfirmarExclusao(null)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="destructive"
-              className="w-full sm:w-auto"
-              disabled={excluir.isPending}
-              onClick={confirmarExclusaoAvulsa}
-            >
-              Excluir
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </div>
   )
 }

@@ -132,6 +132,18 @@ export function useExcluirLancamento() {
   })
 }
 
+/** Reinsere um lançamento excluído (para o "Desfazer"), preservando o id. */
+export function useReinserirLancamento() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (l: Lancamento) => {
+      const { error } = await supabase.from('lancamentos').insert(l)
+      if (error) throw error
+    },
+    onSuccess: () => invalidate(['lancamentos', 'metas']),
+  })
+}
+
 export function useSalvarLancamentosEmMassa() {
   const invalidate = useInvalidate()
   return useMutation({

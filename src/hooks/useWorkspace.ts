@@ -77,6 +77,24 @@ export function useConvitesPendentes() {
   })
 }
 
+/** Marca o onboarding como concluído/dispensado para o usuário atual (uma vez). */
+export function useConcluirOnboarding() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) throw new Error('Não autenticado')
+      const { error } = await supabase
+        .from('profiles')
+        .update({ onboarding_em: new Date().toISOString() })
+        .eq('user_id', user.id)
+        .is('onboarding_em', null)
+      if (error) throw error
+    },
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['profile'] }),
+  })
+}
+
 export function useCriarWorkspace() {
   const qc = useQueryClient()
   return useMutation({

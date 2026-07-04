@@ -27,6 +27,8 @@ export interface Profile {
   user_id: string
   active_workspace_id: string | null
   nome: string | null
+  /** null = onboarding ainda não visto; timestamp = concluído/dispensado */
+  onboarding_em: string | null
   criado_em: string
 }
 

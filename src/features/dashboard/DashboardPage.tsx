@@ -22,6 +22,7 @@ import { MonthSelector } from '@/components/layout/MonthSelector'
 import { EnvelopeCard } from '@/components/EnvelopeCard'
 import { ContasDoMesCard } from '@/components/ContasDoMesCard'
 import { InsightsCard } from '@/components/InsightsCard'
+import { OnboardingCard } from '@/components/OnboardingCard'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
 import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Progress } from '@/components/ui/progress'
@@ -64,6 +65,9 @@ export function DashboardPage() {
         </div>
         <MonthSelector />
       </header>
+
+      {/* Onboarding — só na 1ª vez, até concluir/dispensar */}
+      <OnboardingCard dados={dados} />
 
       {/* Faturas de cartão a vencer */}
       {faturas.length > 0 && (

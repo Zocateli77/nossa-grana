@@ -53,6 +53,8 @@ alter table workspace_invites add column if not exists token uuid default gen_ra
 alter table workspace_invites add column if not exists convidado_por uuid references auth.users(id);
 alter table profiles add column if not exists nome text;
 alter table profiles add column if not exists active_workspace_id uuid references workspaces(id);
+-- onboarding: null = ainda não visto; timestamp = concluído/dispensado (uma vez por usuário)
+alter table profiles add column if not exists onboarding_em timestamptz;
 alter table workspaces add column if not exists criado_por uuid references auth.users(id);
 alter table workspaces add column if not exists nome text;
 alter table workspaces add column if not exists criado_em timestamptz default now();

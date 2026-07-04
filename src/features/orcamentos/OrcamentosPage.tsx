@@ -100,7 +100,7 @@ export function OrcamentosPage() {
                         <span className={cor.texto}>Restam {money(env.resta)}</span>
                       )}
                       {ehPct ? (
-                        <Badge variant="default">{Number(row?.percentual)}% da renda</Badge>
+                        <Badge variant="default">{Number(row?.percentual).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% da renda</Badge>
                       ) : (
                         <Badge variant="muted">{c.grupo}</Badge>
                       )}
@@ -159,6 +159,13 @@ function RendaDialog({ onClose }: { onClose: () => void }) {
   )
 }
 
+/** Aceita percentual com vírgula ou ponto (ex: "1,5" ou "1.5"), 0-100, 2 casas. */
+function parsePercentual(s: string): number {
+  const n = parseFloat(s.replace(',', '.'))
+  if (Number.isNaN(n)) return 0
+  return Math.min(100, Math.max(0, Math.round(n * 100) / 100))
+}
+
 function EditarOrcamentoDialog({ categoria, onClose }: { categoria: Categoria; onClose: () => void }) {
   const { mesRef, salarioBase } = useApp()
   const { dados } = useDados()
@@ -168,7 +175,9 @@ function EditarOrcamentoDialog({ categoria, onClose }: { categoria: Categoria; o
   const existente = dados.orcamentos.find((o) => o.categoria_id === categoria.id && o.mes_referencia === mesRef)
   const [modo, setModo] = useState<'fixo' | 'percentual'>(row?.tipo_valor === 'percentual' ? 'percentual' : 'fixo')
   const [valor, setValor] = useState(row?.tipo_valor === 'percentual' ? 0 : Number(row?.valor_estabelecido ?? 0))
-  const [percentual, setPercentual] = useState(Number(row?.percentual ?? 10))
+  // string para permitir digitar vírgula e decimais quebrados (ex: 1,5%)
+  const [percentualStr, setPercentualStr] = useState(String(row?.percentual ?? 10).replace('.', ','))
+  const percentual = parsePercentual(percentualStr)
   const [recorrente, setRecorrente] = useState(existente?.recorrente ?? true)
   const valorPct = Math.round((percentual / 100) * renda * 100) / 100
 
@@ -208,19 +217,17 @@ function EditarOrcamentoDialog({ categoria, onClose }: { categoria: Categoria; o
               <Label>Percentual da renda prevista</Label>
               <div className="relative">
                 <Input
-                  type="number"
-                  min={0}
-                  max={100}
-                  step={0.5}
-                  value={percentual}
-                  onChange={(e) => setPercentual(Math.max(0, Math.min(100, +e.target.value)))}
+                  type="text"
+                  inputMode="decimal"
+                  value={percentualStr}
+                  onChange={(e) => setPercentualStr(e.target.value.replace(/[^\d.,]/g, ''))}
                   className="pr-8 text-lg font-semibold"
                   autoFocus
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
               </div>
               <p className="text-sm text-muted-foreground">
-                = <b className="text-foreground">{money(valorPct)}</b> ({percentual}% de {money(renda)})
+                = <b className="text-foreground">{money(valorPct)}</b> ({percentual.toLocaleString('pt-BR', { maximumFractionDigits: 2 })}% de {money(renda)})
               </p>
             </div>
           )}

@@ -77,6 +77,22 @@ export function useConvitesPendentes() {
   })
 }
 
+export function useCriarWorkspace() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (nome?: string) => {
+      const { data, error } = await supabase.rpc('create_my_workspace', {
+        p_nome: nome?.trim() || 'Meu espaço',
+      })
+      if (error) throw error
+      return data as string
+    },
+    onSuccess: () => {
+      qc.invalidateQueries()
+    },
+  })
+}
+
 export function useTrocarWorkspace() {
   const qc = useQueryClient()
   return useMutation({

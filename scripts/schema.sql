@@ -432,6 +432,29 @@ begin
 end;
 $$;
 
+-- provision_workspace recebe p_user_id como argumento; não deve ser chamável
+-- diretamente por clientes (permitiria provisionar em nome de outro usuário).
+revoke all on function provision_workspace(uuid, text) from public, anon, authenticated;
+
+-- ---------------------------------------------------------------------
+--  Criar workspace para o próprio usuário (RPC segura p/ o cliente)
+--  Usa auth.uid() internamente — nunca aceita um user_id arbitrário.
+-- ---------------------------------------------------------------------
+create or replace function create_my_workspace(p_nome text default 'Meu espaço')
+returns uuid language plpgsql security definer set search_path = public as $$
+declare
+  uid uuid := auth.uid();
+begin
+  if uid is null then
+    raise exception 'Usuário não autenticado';
+  end if;
+  return provision_workspace(uid, coalesce(nullif(trim(p_nome), ''), 'Meu espaço'));
+end;
+$$;
+
+revoke all on function create_my_workspace(text) from public, anon;
+grant execute on function create_my_workspace(text) to authenticated;
+
 -- ---------------------------------------------------------------------
 --  Provisionamento no signup (trigger em auth.users)
 -- ---------------------------------------------------------------------

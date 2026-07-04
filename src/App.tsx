@@ -1,8 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Routes, Route, Navigate } from 'react-router-dom'
 import { Loader2 } from 'lucide-react'
 import { useAuth } from '@/contexts/AuthContext'
 import { useWorkspace } from '@/contexts/WorkspaceContext'
+import { useCriarWorkspace } from '@/hooks/useWorkspace'
+import { Button } from '@/components/ui/button'
 import { useApp } from '@/contexts/AppContext'
 import { useLancamentos } from '@/hooks/useDados'
 import { useReabastecerRecorrencias } from '@/hooks/useMutations'
@@ -28,6 +30,52 @@ function TelaCarregando() {
   return (
     <div className="min-h-screen flex items-center justify-center">
       <Loader2 className="h-7 w-7 animate-spin text-primary" />
+    </div>
+  )
+}
+
+/** Fallback quando o usuário está logado mas não tem nenhum espaço (provision falhou). */
+function TelaSemWorkspace() {
+  const { sair } = useAuth()
+  const criar = useCriarWorkspace()
+  const [erro, setErro] = useState<string | null>(null)
+
+  async function criarEspaco() {
+    setErro(null)
+    try {
+      await criar.mutateAsync('Meu espaço')
+    } catch (e) {
+      setErro(e instanceof Error ? e.message : 'Não foi possível criar seu espaço. Tente novamente.')
+    }
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center gap-6 p-6 text-center">
+      <div className="space-y-2">
+        <h1 className="text-xl font-extrabold">Vamos criar seu espaço</h1>
+        <p className="text-muted-foreground max-w-xs">
+          Um espaço guarda suas contas, envelopes e lançamentos. Crie o seu para começar a se organizar.
+        </p>
+      </div>
+      <div className="w-full max-w-xs space-y-3">
+        <Button className="w-full" onClick={criarEspaco} disabled={criar.isPending} aria-busy={criar.isPending}>
+          {criar.isPending ? (
+            <>
+              <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" /> Criando…
+            </>
+          ) : (
+            'Criar meu espaço'
+          )}
+        </Button>
+        {erro && (
+          <p role="alert" className="text-sm text-destructive">
+            {erro}
+          </p>
+        )}
+        <Button variant="ghost" className="w-full" onClick={() => void sair()} disabled={criar.isPending}>
+          Sair
+        </Button>
+      </div>
     </div>
   )
 }
@@ -92,12 +140,6 @@ export default function App() {
   if (authCarregando) return <TelaCarregando />
   if (!session) return <LoginPage />
   if (wsCarregando) return <TelaCarregando />
-  if (!workspaceAtivo) {
-    return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <p className="text-muted-foreground text-center">Nenhum espaço encontrado. Tente sair e entrar novamente.</p>
-      </div>
-    )
-  }
+  if (!workspaceAtivo) return <TelaSemWorkspace />
   return <AppAutenticado />
 }

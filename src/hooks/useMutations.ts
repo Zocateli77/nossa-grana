@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Categoria, Desejo, Lancamento, Meta, NovoDesejo, NovoLancamento, Orcamento, Renda, TipoValorOrcamento } from '@/types/db'
+import type { Categoria, Conta, Desejo, Lancamento, Meta, NovoDesejo, NovoLancamento, Orcamento, Renda, TipoValorOrcamento } from '@/types/db'
 import { expandirSerie, parcelasFaltam, type BaseSerie } from '@/lib/calc'
 import { iso } from '@/lib/dates'
 
@@ -353,6 +353,24 @@ export function useSalvarCategoria() {
       return data
     },
     onSuccess: () => invalidate(['categorias']),
+  })
+}
+
+export function useSalvarConta() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (input: Partial<Conta> & { id?: string }) => {
+      const { id, ...payload } = input
+      if (id) {
+        const { data, error } = await supabase.from('contas').update(payload).eq('id', id).select().single()
+        if (error) throw error
+        return data
+      }
+      const { data, error } = await supabase.from('contas').insert(payload).select().single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => invalidate(['contas']),
   })
 }
 

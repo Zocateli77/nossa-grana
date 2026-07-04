@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
+    "test": "vitest run",
+    "test:watch": "vitest",
     "test:desejos": "node scripts/desejos-viabilidade.test.mjs",
     "preview": "vite preview",
     "setup": "node scripts/setup.mjs",
@@ -46,6 +48,7 @@
     "tailwindcss": "^3.4.17",
     "typescript": "^5.7.2",
     "vite": "^6.0.7",
-    "vite-plugin-pwa": "^0.21.1"
+    "vite-plugin-pwa": "^0.21.1",
+    "vitest": "^2.1.9"
   }
 }

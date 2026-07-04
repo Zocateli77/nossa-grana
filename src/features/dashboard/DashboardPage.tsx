@@ -15,6 +15,7 @@ import {
   ehParcelado,
   lancsDoMes,
   byId,
+  faturasAVencer,
 } from '@/lib/calc'
 import { money, pct, dataCurta } from '@/lib/format'
 import { MonthSelector } from '@/components/layout/MonthSelector'
@@ -46,6 +47,7 @@ export function DashboardPage() {
     .filter((l) => ehParcelado(l))
     .sort((a, b) => Number(b.valor) - Number(a.valor))
     .slice(0, 5)
+  const faturas = faturasAVencer(dados)
 
   const pctR = real.pctRenda
   const heroCor = pctR >= 1 ? 'text-destructive' : pctR >= 0.8 ? 'text-warning-foreground' : 'text-foreground'
@@ -60,6 +62,37 @@ export function DashboardPage() {
         </div>
         <MonthSelector />
       </header>
+
+      {/* Faturas de cartão a vencer */}
+      {faturas.length > 0 && (
+        <div className="space-y-2">
+          {faturas.map(({ conta, fatura }) => (
+            <Link key={conta.id} to={`/contas/${conta.id}`} className="block">
+              <Card
+                className={cn(
+                  'p-3 flex items-center gap-3 border',
+                  fatura.vencida ? 'border-destructive/40 bg-destructive/5' : 'border-warning/40 bg-warning/5'
+                )}
+              >
+                <CalendarClock className={cn('h-5 w-5 shrink-0', fatura.vencida ? 'text-destructive' : 'text-warning-foreground')} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold truncate">
+                    Fatura {conta.nome} · {money(fatura.total)}
+                  </p>
+                  <p className={cn('text-xs', fatura.vencida ? 'text-destructive' : 'text-muted-foreground')}>
+                    {fatura.vencida
+                      ? `venceu ${dataCurta(fatura.ciclo.vencimentoISO)}`
+                      : fatura.diasAteVencimento === 0
+                        ? 'vence hoje'
+                        : `vence em ${fatura.diasAteVencimento} ${fatura.diasAteVencimento === 1 ? 'dia' : 'dias'} · ${dataCurta(fatura.ciclo.vencimentoISO)}`}
+                  </p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Hero — quanto você já gastou de verdade */}
       <Card className="overflow-hidden">

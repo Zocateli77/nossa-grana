@@ -14,8 +14,8 @@ export default defineConfig({
         short_name: 'Nossa Grana',
         description: 'Controle financeiro do casal — orçamento por envelopes.',
         lang: 'pt-BR',
-        theme_color: '#0f766e',
-        background_color: '#f8fafc',
+        theme_color: '#E85002',
+        background_color: '#F9F9F9',
         display: 'standalone',
         start_url: '/',
         icons: [

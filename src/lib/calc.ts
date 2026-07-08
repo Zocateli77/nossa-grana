@@ -65,6 +65,12 @@ export function lancsDoMes(lancamentos: Lancamento[], mesRef: string): Lancament
   return lancamentos.filter((l) => noMes(l.data, mesRef))
 }
 
+const TIPOS_SAIDA_PAGAVEIS = new Set<TipoLancamento>(['despesa', 'emprestimo', 'imposto', 'investimento'])
+
+export function lancamentosAPagarNoMes(lancamentos: Lancamento[], mesRef: string): Lancamento[] {
+  return lancsDoMes(lancamentos, mesRef).filter((l) => l.status === 'previsto' && TIPOS_SAIDA_PAGAVEIS.has(l.tipo))
+}
+
 export function gastoCategoriaMes(lancamentos: Lancamento[], categoriaId: string, mesRef: string): number {
   return lancsDoMes(lancamentos, mesRef)
     .filter((l) => l.categoria_id === categoriaId)
@@ -711,9 +717,18 @@ export interface DividaInfo {
   ultimaParcelaMes: string
 }
 
-export function dividas(lancamentos: Lancamento[], hoje: Date = new Date()): DividaInfo[] {
+export function dividas(
+  lancamentos: Lancamento[],
+  hoje: Date = new Date(),
+  categoriaIdsDivida: ReadonlySet<string> = new Set()
+): DividaInfo[] {
   const mesCorrente = mesRefDe(iso(hoje))
-  const emprestimos = lancamentos.filter((l) => l.tipo === 'emprestimo' && ehParcelado(l) && l.status !== 'quitado')
+  const emprestimos = lancamentos.filter(
+    (l) =>
+      (l.tipo === 'emprestimo' || (l.categoria_id != null && categoriaIdsDivida.has(l.categoria_id))) &&
+      ehParcelado(l) &&
+      l.status !== 'quitado'
+  )
   // agrupa as parcelas-irmãs por grupo_id (linhas legadas sem grupo ficam isoladas pelo id)
   const grupos = new Map<string, Lancamento[]>()
   for (const l of emprestimos) {

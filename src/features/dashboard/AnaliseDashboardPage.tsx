@@ -32,10 +32,10 @@ import { Badge } from '@/components/ui/badge'
 import { cn, rechartsTooltipProps } from '@/lib/utils'
 
 const CORES_RENDA = {
-  investimento: 'hsl(152 56% 38%)',
-  impostos: 'hsl(200 10% 55%)',
-  gastos: 'hsl(173 80% 26%)',
-  sobra: 'hsl(168 40% 72%)',
+  investimento: 'hsl(var(--success))',
+  impostos: 'hsl(var(--muted-foreground))',
+  gastos: 'hsl(var(--primary))',
+  sobra: 'hsl(var(--accent))',
 }
 
 export function AnaliseDashboardPage() {

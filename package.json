@@ -7,6 +7,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "test:desejos": "node scripts/desejos-viabilidade.test.mjs",
+    "test:lancamentos": "node scripts/lancamentos-pagamento.test.mjs",
+    "test:theme": "node scripts/theme-contrast.test.mjs",
     "preview": "vite preview",
     "setup": "node scripts/setup.mjs"
   },

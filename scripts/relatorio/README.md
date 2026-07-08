@@ -31,13 +31,16 @@ O workflow lê estes secrets. Adicione em **Settings → Secrets and variables �
 
 | Secret | O que é | Onde pegar |
 |---|---|---|
-| `DATABASE_URL` | Connection string do **pooler** do Supabase (IPv4 — obrigatório no Actions; a conexão direta é só IPv6). | Dashboard Supabase → Settings → Database → **Session pooler** (porta 5432). Formato: `postgresql://postgres.<ref>:<senha>@aws-0-<região>.pooler.supabase.com:5432/postgres` |
-| `GMAIL_CLIENT_ID` | OAuth do Gmail (mesmas credenciais do ZocLife). | Vercel do ZocLife / Google Cloud Console |
+| `SUPABASE_URL` | URL do projeto Supabase. | `env.Supabase.txt` (Url) |
+| `SUPABASE_SERVICE_ROLE_KEY` | Chave service_role (bypassa RLS; acesso via REST/HTTPS — funciona no Actions, ao contrário da conexão direta IPv6). | `env.Supabase.txt` (service_role) |
+| `GMAIL_CLIENT_ID` | OAuth do Gmail (client Desktop do Google). | `client_secret_*.json` do Google Cloud |
 | `GMAIL_CLIENT_SECRET` | idem | idem |
-| `GMAIL_REFRESH_TOKEN` | idem | idem |
-| `GMAIL_FROM_EMAIL` | e-mail que envia (o mesmo do ZocLife). | idem |
+| `GMAIL_REFRESH_TOKEN` | Gerado 1x pelo fluxo de consentimento. | `node scripts/relatorio/gerar-refresh-token.mjs "<client_secret.json>"` |
+| `GMAIL_FROM_EMAIL` | e-mail que envia. | definido pelo gerador (a conta que você autorizar) |
 
-Valores **não sensíveis** (destinatários, login, URL do app) ficam direto no workflow, fáceis de editar.
+O script `gerar-refresh-token.mjs` faz o fluxo OAuth (abre URL, você autoriza) e **grava os 4 secrets GMAIL_* automaticamente** via `gh`.
+
+Valores **não sensíveis** (workspace, destinatários, URL do app) ficam direto no workflow, fáceis de editar.
 
 ## Disparo manual (teste)
 

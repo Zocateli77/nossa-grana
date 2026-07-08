@@ -64,44 +64,38 @@ function orcamentoEfetivo(orcamentos, categId, mesRef, renda) {
 const gastoCategoriaMes = (lancs, categId, mesRef) =>
   lancs.filter((l) => l.categoria_id === categId && noMes(l.data, mesRef)).reduce((s, l) => s + Number(l.valor), 0)
 
-export async function coletarDados(client, { hoje, loginEmail }) {
+export async function coletarDados(supabase, { hoje, workspaceId }) {
   const diaSemana = new Date(`${hoje}T12:00:00-03:00`).getDay()
   // Relatório é sempre PLANEJANDO o próximo mês (em julho, fala de agosto).
   const mesRef = navegarMes(mesRefDe(hoje), 1)
 
-  // workspace do casal = active_workspace_id do login informado (fallback: 1º com dados)
-  let ws = null
-  const q1 = await client.query(
-    `select p.active_workspace_id from profiles p
-     join auth.users u on u.id = p.user_id
-     where lower(u.email) = lower($1) limit 1`,
-    [loginEmail]
-  )
-  ws = q1.rows[0]?.active_workspace_id
+  const sel = async (q) => {
+    const { data, error } = await q
+    if (error) throw new Error(error.message)
+    return data ?? []
+  }
+
+  // workspace do casal: id informado, ou o "Nossa Grana", ou o 1º com dados.
+  let ws = workspaceId
   if (!ws) {
-    const q2 = await client.query(`select workspace_id, count(*) n from lancamentos group by workspace_id order by n desc limit 1`)
-    ws = q2.rows[0]?.workspace_id
+    const wss = await sel(supabase.from('workspaces').select('id,nome').ilike('nome', 'Nossa Grana'))
+    ws = wss[0]?.id
+  }
+  if (!ws) {
+    const l = await sel(supabase.from('lancamentos').select('workspace_id').limit(1))
+    ws = l[0]?.workspace_id
   }
   if (!ws) throw new Error('Nenhum workspace encontrado')
 
   const desde = navegarMes(mesRef, -3)
-  // pg Client não roda queries em paralelo — sequencial.
-  const cats = await client.query(`select id, nome, tipo_reserva, cor, icone from categorias where workspace_id = $1 and ativo`, [ws])
-  const rendas = await client.query(`select mes_referencia::text, valor, recorrente from rendas where workspace_id = $1`, [ws])
-  const orcs = await client.query(
-    `select categoria_id, mes_referencia::text, valor_estabelecido, tipo_valor, percentual, recorrente
-     from orcamentos where workspace_id = $1`,
-    [ws]
+  const categorias = await sel(supabase.from('categorias').select('id,nome,tipo_reserva,cor,icone').eq('workspace_id', ws).eq('ativo', true))
+  const rendasR = await sel(supabase.from('rendas').select('mes_referencia,valor,recorrente').eq('workspace_id', ws))
+  const orcamentos = await sel(
+    supabase.from('orcamentos').select('categoria_id,mes_referencia,valor_estabelecido,tipo_valor,percentual,recorrente').eq('workspace_id', ws)
   )
-  const lancs = await client.query(
-    `select id, descricao, valor, data::text, tipo, categoria_id, status, privado
-     from lancamentos where workspace_id = $1 and data >= $2`,
-    [ws, desde]
+  const lancamentos = await sel(
+    supabase.from('lancamentos').select('id,descricao,valor,data,tipo,categoria_id,status,privado').eq('workspace_id', ws).gte('data', desde)
   )
-  const categorias = cats.rows
-  const rendasR = rendas.rows.map((r) => ({ ...r, mes_referencia: r.mes_referencia.slice(0, 10) }))
-  const orcamentos = orcs.rows.map((o) => ({ ...o, mes_referencia: o.mes_referencia.slice(0, 10) }))
-  const lancamentos = lancs.rows.map((l) => ({ ...l, data: l.data.slice(0, 10) }))
   const catMap = new Map(categorias.map((c) => [c.id, c]))
 
   const doMes = lancamentos.filter((l) => noMes(l.data, mesRef))

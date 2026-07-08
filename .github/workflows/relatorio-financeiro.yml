@@ -26,12 +26,14 @@ jobs:
       - name: Enviar relatório
         run: node scripts/relatorio/enviar.mjs
         env:
-          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          # Acesso ao banco via API REST do Supabase (service_role, HTTPS/IPv4).
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
           GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
           GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
           GMAIL_FROM_EMAIL: ${{ secrets.GMAIL_FROM_EMAIL }}
           # Não sensíveis (pode editar aqui):
+          RELATORIO_WORKSPACE_ID: '00454a79-24da-4482-8685-0de7dbe25d38'
           RELATORIO_TO: 'zocateli2001@gmail.com,theleeeh@gmail.com'
-          LOGIN_EMAIL: 'zocateli2001@gmail.com'
           APP_URL: 'https://nossa-grana.vercel.app'

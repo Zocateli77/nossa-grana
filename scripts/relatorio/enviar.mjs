@@ -5,7 +5,7 @@
 import { readFileSync, writeFileSync } from 'node:fs'
 import { join, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
-import pg from 'pg'
+import { createClient } from '@supabase/supabase-js'
 import { coletarDados, hojeSaoPaulo } from './dados.mjs'
 import { gerarHtml } from './html.mjs'
 
@@ -14,33 +14,31 @@ const ROOT = join(__dirname, '..', '..')
 const DRY = process.argv.includes('--dry-run')
 const diaArg = process.argv.find((a) => a.startsWith('--dia='))
 
-const LOGIN_EMAIL = process.env.LOGIN_EMAIL || 'zocateli2001@gmail.com'
+const WORKSPACE_ID = process.env.RELATORIO_WORKSPACE_ID || null
 const DESTINOS = (process.env.RELATORIO_TO || 'zocateli2001@gmail.com,theleeeh@gmail.com')
   .split(',')
   .map((s) => s.trim())
   .filter(Boolean)
 
-/** Conexão pg: usa DATABASE_URL (CI) ou env.Supabase.txt (local). */
-function criarClient() {
-  if (process.env.DATABASE_URL) {
-    return new pg.Client({ connectionString: process.env.DATABASE_URL, ssl: { rejectUnauthorized: false }, connectionTimeoutMillis: 20000 })
+/**
+ * Cliente Supabase (REST, HTTPS/IPv4 — funciona no GitHub Actions) com service_role
+ * (bypassa RLS). Lê SUPABASE_URL/SUPABASE_SERVICE_ROLE_KEY (CI) ou env.Supabase.txt (local).
+ */
+function criarSupabase() {
+  let url = process.env.SUPABASE_URL
+  let key = process.env.SUPABASE_SERVICE_ROLE_KEY
+  if (!url || !key) {
+    const txt = readFileSync(join(ROOT, 'env.Supabase.txt'), 'utf8')
+    const out = {}
+    for (const l of txt.split(/\r?\n/)) {
+      const i = l.indexOf(':')
+      if (i > 0) out[l.slice(0, i).trim().toLowerCase()] = l.slice(i + 1).trim()
+    }
+    url = url || out['url']
+    key = key || out['service_role']
   }
-  const txt = readFileSync(join(ROOT, 'env.Supabase.txt'), 'utf8')
-  const out = {}
-  for (const l of txt.split(/\r?\n/)) {
-    const i = l.indexOf(':')
-    if (i > 0) out[l.slice(0, i).trim().toLowerCase()] = l.slice(i + 1).trim()
-  }
-  const ref = new URL(out['url']).hostname.split('.')[0]
-  return new pg.Client({
-    host: `db.${ref}.supabase.co`,
-    port: 5432,
-    user: 'postgres',
-    password: out['senha'],
-    database: 'postgres',
-    ssl: { rejectUnauthorized: false },
-    connectionTimeoutMillis: 20000,
-  })
+  if (!url || !key) throw new Error('Faltam SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY.')
+  return createClient(url, key, { auth: { persistSession: false } })
 }
 
 async function enviarEmail({ to, subject, html }) {
@@ -70,14 +68,8 @@ async function enviarEmail({ to, subject, html }) {
 
 async function main() {
   const hoje = hojeSaoPaulo()
-  const client = criarClient()
-  await client.connect()
-  let dados
-  try {
-    dados = await coletarDados(client, { hoje, loginEmail: LOGIN_EMAIL })
-  } finally {
-    await client.end()
-  }
+  const supabase = criarSupabase()
+  const dados = await coletarDados(supabase, { hoje, workspaceId: WORKSPACE_ID })
 
   // permite forçar o dia da semana em teste (--dia=0..6)
   if (diaArg) {

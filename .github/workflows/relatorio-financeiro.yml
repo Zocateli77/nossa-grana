@@ -1,0 +1,39 @@
+name: Relatório financeiro por e-mail
+
+# Roda seg (1), qua (3), sex (5) e dom (0) às 11:00 UTC = 08:00 no horário de Brasília.
+# Cron do GitHub usa UTC. Workflows agendados só disparam a partir do branch default (main).
+on:
+  schedule:
+    - cron: '0 11 * * 0,1,3,5'
+  workflow_dispatch: # permite disparo manual (teste) pela aba Actions
+
+jobs:
+  enviar-relatorio:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Instalar dependências
+        run: npm ci
+
+      - name: Enviar relatório
+        run: node scripts/relatorio/enviar.mjs
+        env:
+          # Acesso ao banco via API REST do Supabase (service_role, HTTPS/IPv4).
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          GMAIL_CLIENT_ID: ${{ secrets.GMAIL_CLIENT_ID }}
+          GMAIL_CLIENT_SECRET: ${{ secrets.GMAIL_CLIENT_SECRET }}
+          GMAIL_REFRESH_TOKEN: ${{ secrets.GMAIL_REFRESH_TOKEN }}
+          GMAIL_FROM_EMAIL: ${{ secrets.GMAIL_FROM_EMAIL }}
+          # Não sensíveis (pode editar aqui):
+          RELATORIO_WORKSPACE_ID: '00454a79-24da-4482-8685-0de7dbe25d38'
+          RELATORIO_TO: 'zocateli2001@gmail.com,theleeeh@gmail.com'
+          APP_URL: 'https://nossa-grana.vercel.app'

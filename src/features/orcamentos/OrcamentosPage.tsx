@@ -170,9 +170,11 @@ function EditarOrcamentoDialog({ categoria, onClose }: { categoria: Categoria; o
   const { mesRef, salarioBase } = useApp()
   const { dados } = useDados()
   const salvar = useSalvarOrcamento()
+  const salvarCategoria = useSalvarCategoria()
   const renda = rendaEfetiva(dados.rendas, mesRef, salarioBase)
   const row = orcamentoRow(dados.orcamentos, categoria.id, mesRef)
   const existente = dados.orcamentos.find((o) => o.categoria_id === categoria.id && o.mes_referencia === mesRef)
+  const [nome, setNome] = useState(categoria.nome)
   const [modo, setModo] = useState<'fixo' | 'percentual'>(row?.tipo_valor === 'percentual' ? 'percentual' : 'fixo')
   const [valor, setValor] = useState(row?.tipo_valor === 'percentual' ? 0 : Number(row?.valor_estabelecido ?? 0))
   // string para permitir digitar vírgula e decimais quebrados (ex: 1,5%)
@@ -182,6 +184,11 @@ function EditarOrcamentoDialog({ categoria, onClose }: { categoria: Categoria; o
   const valorPct = Math.round((percentual / 100) * renda * 100) / 100
 
   async function onSave() {
+    const nomeLimpo = nome.trim()
+    if (!nomeLimpo) return
+    if (nomeLimpo !== categoria.nome) {
+      await salvarCategoria.mutateAsync({ id: categoria.id, nome: nomeLimpo })
+    }
     await salvar.mutateAsync({
       categoria_id: categoria.id,
       mes_referencia: mesRef,
@@ -198,10 +205,15 @@ function EditarOrcamentoDialog({ categoria, onClose }: { categoria: Categoria; o
       <DialogContent>
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <CategoriaIcon icone={categoria.icone} cor={categoria.cor} className="h-8 w-8" size={16} /> {categoria.nome}
+            <CategoriaIcon icone={categoria.icone} cor={categoria.cor} className="h-8 w-8" size={16} /> {nome.trim() || categoria.nome}
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4">
+          <div className="space-y-1.5">
+            <Label>Nome do envelope</Label>
+            <Input value={nome} onChange={(e) => setNome(e.target.value)} autoFocus />
+          </div>
+
           <div className="flex gap-2">
             <ModoBtn ativo={modo === 'fixo'} onClick={() => setModo('fixo')}>Valor fixo</ModoBtn>
             <ModoBtn ativo={modo === 'percentual'} onClick={() => setModo('percentual')}>% da renda</ModoBtn>
@@ -210,7 +222,7 @@ function EditarOrcamentoDialog({ categoria, onClose }: { categoria: Categoria; o
           {modo === 'fixo' ? (
             <div className="space-y-1.5">
               <Label>Valor do envelope (este mês)</Label>
-              <MoneyInput value={valor} onChange={setValor} autoFocus />
+              <MoneyInput value={valor} onChange={setValor} />
             </div>
           ) : (
             <div className="space-y-1.5">
@@ -222,7 +234,6 @@ function EditarOrcamentoDialog({ categoria, onClose }: { categoria: Categoria; o
                   value={percentualStr}
                   onChange={(e) => setPercentualStr(e.target.value.replace(/[^\d.,]/g, ''))}
                   className="pr-8 text-lg font-semibold"
-                  autoFocus
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
               </div>
@@ -236,8 +247,8 @@ function EditarOrcamentoDialog({ categoria, onClose }: { categoria: Categoria; o
             <Label className="text-foreground">Repete todo mês</Label>
             <Switch checked={recorrente} onCheckedChange={setRecorrente} />
           </div>
-          <Button className="w-full" onClick={onSave} disabled={salvar.isPending}>
-            {salvar.isPending && <Loader2 className="h-4 w-4 animate-spin" />} Salvar
+          <Button className="w-full" onClick={onSave} disabled={salvar.isPending || salvarCategoria.isPending || !nome.trim()}>
+            {(salvar.isPending || salvarCategoria.isPending) && <Loader2 className="h-4 w-4 animate-spin" />} Salvar
           </Button>
         </div>
       </DialogContent>

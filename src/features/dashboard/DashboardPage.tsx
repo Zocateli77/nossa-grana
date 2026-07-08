@@ -1,7 +1,9 @@
+import { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { AlertTriangle, TrendingUp, Landmark, ArrowRight, CalendarClock, PiggyBank } from 'lucide-react'
+import { AlertTriangle, TrendingUp, Landmark, ArrowRight, CalendarClock, PiggyBank, CheckCircle2, Loader2 } from 'lucide-react'
 import { useApp } from '@/contexts/AppContext'
 import { useDados } from '@/hooks/useDados'
+import { useMarcarLancamentosComoPagos } from '@/hooks/useMutations'
 import {
   envelopesDoMes,
   resumoMes,
@@ -14,6 +16,7 @@ import {
   progressoMeta,
   ehParcelado,
   lancsDoMes,
+  lancamentosAPagarNoMes,
   byId,
   faturasAVencer,
 } from '@/lib/calc'
@@ -28,11 +31,15 @@ import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Progress } from '@/components/ui/progress'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog'
 import { cn } from '@/lib/utils'
 
 export function DashboardPage() {
   const { mesRef, salarioBase } = useApp()
   const { dados, isLoading } = useDados()
+  const marcarPagos = useMarcarLancamentosComoPagos()
+  const [confirmarPagamento, setConfirmarPagamento] = useState(false)
 
   if (isLoading) return <Carregando />
 
@@ -44,6 +51,8 @@ export function DashboardPage() {
   const top = maioresGastos(dados.lancamentos, mesRef, 5)
   const catMap = byId(dados.categorias)
   const envs = envelopesDoMes(dados, mesRef)
+  const aPagar = lancamentosAPagarNoMes(dados.lancamentos, mesRef)
+  const totalAPagar = aPagar.reduce((s, l) => s + Number(l.valor), 0)
   const meusMesadas = mesadas(dados, mesRef)
   const metasTop = dados.metas.filter((m) => !m.concluida).slice(0, 3)
   const compromissos = lancsDoMes(dados.lancamentos, mesRef)
@@ -55,6 +64,11 @@ export function DashboardPage() {
   const pctR = real.pctRenda
   const heroCor = pctR >= 1 ? 'text-destructive' : pctR >= 0.8 ? 'text-warning-foreground' : 'text-foreground'
   const barraCor = pctR >= 1 ? 'bg-destructive' : pctR >= 0.8 ? 'bg-warning' : 'bg-primary'
+
+  async function confirmarTudoPago() {
+    await marcarPagos.mutateAsync(aPagar.map((l) => l.id))
+    setConfirmarPagamento(false)
+  }
 
   return (
     <div className="space-y-4">
@@ -128,6 +142,16 @@ export function DashboardPage() {
               <span>Média/dia <b className="text-foreground">{money(real.mediaDia)}</b></span>
             </div>
           </div>
+
+          <Button
+            type="button"
+            className="mt-4 w-full"
+            disabled={aPagar.length === 0 || marcarPagos.isPending}
+            onClick={() => setConfirmarPagamento(true)}
+          >
+            {marcarPagos.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <CheckCircle2 className="h-4 w-4" />}
+            {aPagar.length > 0 ? 'Paguei tudo que devia este mês' : 'Tudo pago neste mês'}
+          </Button>
 
           {real.saldoReal < 0 && (
             <p className="mt-3 flex items-center gap-1.5 text-sm text-destructive">
@@ -314,6 +338,26 @@ export function DashboardPage() {
           </div>
         </>
       )}
+
+      <Dialog open={confirmarPagamento} onOpenChange={setConfirmarPagamento}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Marcar tudo como pago?</DialogTitle>
+            <DialogDescription>
+              Você vai marcar {aPagar.length} lançamento{aPagar.length !== 1 ? 's' : ''} previsto{aPagar.length !== 1 ? 's' : ''} deste mês como pago{aPagar.length !== 1 ? 's' : ''}, somando {money(totalAPagar)}.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="flex-col gap-2 sm:flex-row">
+            <Button variant="outline" className="w-full sm:w-auto" onClick={() => setConfirmarPagamento(false)}>
+              Cancelar
+            </Button>
+            <Button className="w-full sm:w-auto" disabled={marcarPagos.isPending || aPagar.length === 0} onClick={confirmarTudoPago}>
+              {marcarPagos.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+              Confirmar pagamento
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <div className="h-4" />
     </div>

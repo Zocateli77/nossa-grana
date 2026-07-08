@@ -144,6 +144,19 @@ export function useReinserirLancamento() {
   })
 }
 
+export function useMarcarLancamentosComoPagos() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (ids: string[]) => {
+      if (ids.length === 0) return []
+      const { error } = await supabase.from('lancamentos').update({ status: 'pago' }).in('id', ids)
+      if (error) throw error
+      return ids
+    },
+    onSuccess: () => invalidate(['lancamentos', 'metas']),
+  })
+}
+
 export function useSalvarLancamentosEmMassa() {
   const invalidate = useInvalidate()
   return useMutation({

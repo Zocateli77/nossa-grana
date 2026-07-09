@@ -3,12 +3,15 @@ import { useNavigate, useParams } from 'react-router-dom'
 import { ArrowLeft, CreditCard, Wallet, Banknote, HandCoins } from 'lucide-react'
 import { useDados } from '@/hooks/useDados'
 import { useApp } from '@/contexts/AppContext'
-import { byId, lancsDoMes, totalContaMes } from '@/lib/calc'
+import { byId, lancsDoMes, totalContaMes, faturaAberta } from '@/lib/calc'
 import { money, dataCurta } from '@/lib/format'
 import type { TipoConta } from '@/types/db'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
+import { FaturaCartao } from '@/components/FaturaCartao'
+import { CartaoConfigDialog } from '@/components/CartaoConfigDialog'
 import { Carregando, Vazio } from '@/components/Estados'
+import { Progress } from '@/components/ui/progress'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -49,19 +52,48 @@ export function ContasPage() {
         />
       )
     }
+    const Icon = ICON[conta.tipo]
+    const cabecalho = (
+      <header className="flex items-center gap-2 mb-4">
+        <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => navigate('/contas')} aria-label="Voltar">
+          <ArrowLeft className="h-5 w-5" />
+        </Button>
+        <h1 className="text-xl font-extrabold tracking-tight truncate">{conta.nome}</h1>
+      </header>
+    )
+
+    // Cartão de crédito: mostra a fatura (ciclo de fechamento), não o mês-calendário.
+    if (conta.tipo === 'cartao_credito') {
+      return (
+        <div>
+          <header className="flex items-center gap-2 mb-4">
+            <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => navigate('/contas')} aria-label="Voltar">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+            <h1 className="text-xl font-extrabold tracking-tight truncate flex-1">{conta.nome}</h1>
+            <CartaoConfigDialog conta={conta} />
+          </header>
+          {conta.dia_fechamento ? (
+            <FaturaCartao conta={conta} lancamentos={dados.lancamentos} catMap={catMap} />
+          ) : (
+            <Vazio
+              icon={CreditCard}
+              titulo="Configure a fatura deste cartão"
+              descricao="Informe o dia de fechamento e de vencimento para acompanhar quanto vence e quando."
+              acao={<CartaoConfigDialog conta={conta} />}
+            />
+          )}
+        </div>
+      )
+    }
+
     const lancs = lancsDoMes(dados.lancamentos, mesRef)
       .filter((l) => l.conta_id === id)
       .sort((a, b) => (a.data < b.data ? 1 : -1))
     const total = lancs.reduce((s, l) => s + Number(l.valor), 0)
-    const Icon = ICON[conta.tipo]
     return (
       <div>
-        <header className="flex items-center gap-2 mb-4">
-          <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => navigate('/contas')} aria-label="Voltar">
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <h1 className="text-xl font-extrabold tracking-tight truncate">{conta.nome}</h1>
-        </header>
+        {cabecalho}
         <Card className="p-5 mb-4" style={{ borderColor: withAlpha(conta.cor ?? themeColors.primary, 0.33) }}>
           <div className="flex items-center gap-2 text-sm text-muted-foreground"><Icon className="h-4 w-4" /> {ROTULO[conta.tipo]}</div>
           <p className="text-3xl font-extrabold mt-1">{money(total)}</p>
@@ -114,6 +146,10 @@ export function ContasPage() {
           contasComTotal.map(({ conta, total }) => {
           const Icon = ICON[conta.tipo]
           const dono = dados.pessoas.find((p) => p.id === conta.dono_id)
+          const fatura =
+            conta.tipo === 'cartao_credito' && conta.dia_fechamento
+              ? faturaAberta(dados.lancamentos, conta)
+              : null
           return (
             <button
               key={conta.id}
@@ -121,24 +157,41 @@ export function ContasPage() {
               className="w-full text-left"
               aria-label={`${conta.nome}, ${money(total)} no mês`}
             >
-              <Card className="p-4 flex items-center gap-3 hover:shadow-md transition-shadow">
-                <span
-                  className="flex h-10 w-10 items-center justify-center rounded-xl"
-                  style={{
-                    backgroundColor: withAlpha(conta.cor ?? themeColors.primary, 0.13),
-                    color: conta.cor ?? themeColors.primary,
-                  }}
-                >
-                  <Icon className="h-5 w-5" />
-                </span>
-                <div className="min-w-0 flex-1">
-                  <p className="font-semibold truncate">{conta.nome}</p>
-                  <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <span>{ROTULO[conta.tipo]}</span>
-                    {dono && dono.nome !== 'Compartilhado' && <Badge variant="muted">{dono.nome}</Badge>}
+              <Card className="p-4 hover:shadow-md transition-shadow">
+                <div className="flex items-center gap-3">
+                  <span
+                    className="flex h-10 w-10 items-center justify-center rounded-xl"
+                    style={{
+                      backgroundColor: withAlpha(conta.cor ?? themeColors.primary, 0.13),
+                      color: conta.cor ?? themeColors.primary,
+                    }}
+                  >
+                    <Icon className="h-5 w-5" />
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <p className="font-semibold truncate">{conta.nome}</p>
+                    <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                      <span>{ROTULO[conta.tipo]}</span>
+                      {dono && dono.nome !== 'Compartilhado' && <Badge variant="muted">{dono.nome}</Badge>}
+                    </div>
                   </div>
+                  <span className="font-bold tabular-nums">{money(total)}</span>
                 </div>
-                <span className="font-bold tabular-nums">{money(total)}</span>
+                {fatura && (
+                  <div className="mt-3 pt-3 border-t">
+                    <div className="flex justify-between text-xs text-muted-foreground">
+                      <span>Fatura aberta · fecha dia {conta.dia_fechamento}</span>
+                      <span className="tabular-nums font-medium text-foreground">{money(fatura.total)}</span>
+                    </div>
+                    {fatura.limite != null && fatura.usoLimite != null && (
+                      <Progress
+                        value={fatura.usoLimite * 100}
+                        indicatorClassName={fatura.usoLimite >= 0.9 ? 'bg-destructive' : fatura.usoLimite >= 0.7 ? 'bg-warning' : 'bg-success'}
+                        className="mt-1.5 h-1.5"
+                      />
+                    )}
+                  </div>
+                )}
               </Card>
             </button>
           )

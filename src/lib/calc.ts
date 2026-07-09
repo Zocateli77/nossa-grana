@@ -1,4 +1,4 @@
-import { parseISO, isWithinInterval, startOfMonth, differenceInCalendarMonths, getDaysInMonth } from 'date-fns'
+import { parseISO, isWithinInterval, startOfMonth, differenceInCalendarMonths, differenceInCalendarDays, getDaysInMonth } from 'date-fns'
 import type { Categoria, Conta, Desejo, Frequencia, Lancamento, Meta, NovoLancamento, Orcamento, Pessoa, Renda, StatusLancamento, TipoLancamento } from '@/types/db'
 import { mesRange, semanaRange, restanteDoMes, noMes, mesRefDe, navegarMes, iso, mesAtualRef, addMonths } from './dates'
 
@@ -17,6 +17,8 @@ export interface Dados {
 }
 
 const round2 = (n: number) => Math.round(n * 100) / 100
+/** Formata em BRL para textos gerados aqui (insights). Sem acoplar com a UI. */
+const moneyBr = (n: number) => n.toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 
 /**
  * Status padrão de um novo lançamento:
@@ -465,6 +467,68 @@ export function gastosPorCategoria(dados: Dados, mesRef: string): GastoCategoria
   return out.sort((a, b) => b.total - a.total)
 }
 
+// ------------------------------------------------------------------
+//  Insights do mês — regras puras (sem IA), comparando com a média recente
+// ------------------------------------------------------------------
+
+export type SeveridadeInsight = 'alerta' | 'positivo' | 'info'
+
+export interface Insight {
+  id: string
+  severidade: SeveridadeInsight
+  texto: string
+}
+
+/** Média de gasto de uma categoria nos N meses anteriores a mesRef. */
+function mediaCategoriaMeses(lancamentos: Lancamento[], categoriaId: string, mesRef: string, n = 3): number {
+  let soma = 0
+  for (let i = 1; i <= n; i++) soma += gastoCategoriaMes(lancamentos, categoriaId, navegarMes(mesRef, -i))
+  return round2(soma / n)
+}
+
+/**
+ * Gera insights acionáveis do mês comparando o gasto por categoria com a média
+ * dos 3 meses anteriores. Alertas (gastando mais) primeiro, depois um reforço
+ * positivo (economia). Regras têm piso em reais p/ evitar ruído. Máx. 3.
+ */
+export function insightsDoMes(dados: Dados, mesRef: string): Insight[] {
+  const PISO = 50 // ignora variações pequenas (ruído)
+  const alertas: (Insight & { peso: number })[] = []
+  const positivos: (Insight & { peso: number })[] = []
+
+  for (const cat of dados.categorias) {
+    if (cat.tipo_reserva !== 'gasto') continue
+    const atual = gastoCategoriaMes(dados.lancamentos, cat.id, mesRef)
+    const media = mediaCategoriaMeses(dados.lancamentos, cat.id, mesRef)
+    if (media < PISO) continue // sem histórico relevante p/ comparar
+    const diff = round2(atual - media)
+    const pctVar = media > 0 ? diff / media : 0
+
+    if (diff >= PISO && pctVar >= 0.25) {
+      alertas.push({
+        id: `alta-${cat.id}`,
+        severidade: 'alerta',
+        texto: `Você já gastou ${Math.round(pctVar * 100)}% a mais em ${cat.nome} que sua média (${moneyBr(diff)} a mais).`,
+        peso: diff,
+      })
+    } else if (-diff >= PISO && pctVar <= -0.25) {
+      positivos.push({
+        id: `baixa-${cat.id}`,
+        severidade: 'positivo',
+        texto: `Você gastou ${moneyBr(-diff)} a menos em ${cat.nome} que sua média. 👏`,
+        peso: -diff,
+      })
+    }
+  }
+
+  alertas.sort((a, b) => b.peso - a.peso)
+  positivos.sort((a, b) => b.peso - a.peso)
+  // alertas primeiro (mais acionáveis); completa com 1 reforço positivo se sobra espaço
+  const escolhidos = alertas.slice(0, 3)
+  if (escolhidos.length < 3 && positivos.length > 0) escolhidos.push(positivos[0])
+  return escolhidos.slice(0, 3).map(({ peso: _peso, ...ins }) => ins)
+}
+
 /** As N maiores despesas individuais do mês. */
 export function maioresGastos(lancamentos: Lancamento[], mesRef: string, n = 5): Lancamento[] {
   return lancsDoMes(lancamentos, mesRef)
@@ -563,11 +627,18 @@ export function expandirSerie(base: BaseSerie, grupoId: string): NovoLancamento[
     const atual = base.parcela_atual ?? 1
     const total = base.parcela_total as number
     const primeira = base.data_primeira_parcela ?? iso(addMonths(parseISO(base.data), -(atual - 1)))
+    // Ajuste de centavos: quando o valor total é conhecido e a série é gerada do
+    // início, cada parcela é round2(total/n) e a ÚLTIMA absorve a diferença — assim
+    // a soma fecha exatamente o total (ex: 1000/3 → 333,33 + 333,33 + 333,34).
+    const ajustaCentavos = base.valor_total != null && atual === 1
+    const porParcela = ajustaCentavos ? round2(Number(base.valor_total) / total) : base.valor
+    const ultima = ajustaCentavos ? round2(Number(base.valor_total) - porParcela * (total - 1)) : base.valor
     const rows: NovoLancamento[] = []
     for (let k = atual; k <= total; k++) {
       const data = iso(addMonths(parseISO(base.data), k - atual))
       rows.push({
         ...comum,
+        valor: k === total ? ultima : porParcela,
         // só a 1ª ocorrência mantém o vínculo com a meta (as futuras não pré-creditam)
         meta_id: k === atual ? base.meta_id : null,
         data,
@@ -916,6 +987,170 @@ export function totalContaMes(lancamentos: Lancamento[], contaId: string, mesRef
   return lancsDoMes(lancamentos, mesRef)
     .filter((l) => l.conta_id === contaId)
     .reduce((s, l) => s + Number(l.valor), 0)
+}
+
+// ------------------------------------------------------------------
+//  Fatura de cartão de crédito (derivada de dia_fechamento/dia_vencimento)
+//  Sem tabela nova: o ciclo e o total saem dos lançamentos já existentes.
+// ------------------------------------------------------------------
+
+/** Data do "dia do mês" (1-31) dentro do mês de `ref`, com clamp ao último dia. */
+function diaNoMes(ref: Date, dia: number): Date {
+  const ultimo = getDaysInMonth(ref)
+  const d = Math.min(Math.max(1, dia), ultimo)
+  return new Date(ref.getFullYear(), ref.getMonth(), d)
+}
+
+export type EstadoFatura = 'futura' | 'aberta' | 'fechada'
+
+export interface CicloFatura {
+  /** 1º dia do mês em que a fatura fecha — identidade do ciclo. */
+  mesRef: string
+  inicioISO: string // primeiro dia coberto pela fatura
+  fimISO: string // dia de fechamento (inclusive)
+  vencimentoISO: string // data de vencimento do pagamento
+}
+
+export interface FaturaInfo {
+  ciclo: CicloFatura
+  itens: Lancamento[]
+  total: number
+  estado: EstadoFatura
+  /** dias de hoje até o vencimento (negativo = já venceu). */
+  diasAteVencimento: number
+  vencida: boolean
+  limite: number | null
+  /** total / limite (0..1+), null se o cartão não tem limite definido. */
+  usoLimite: number | null
+}
+
+/**
+ * Ciclo de fatura cuja competência (mês de fechamento) é `mesRef`.
+ * Cobre compras de (fechamento anterior + 1 dia) até o fechamento deste mês.
+ * Vencimento no mesmo mês do fechamento se dia_vencimento > dia_fechamento;
+ * caso contrário, no mês seguinte. Retorna null se a conta não é cartão com fechamento.
+ */
+export function cicloFatura(conta: Conta, mesRef: string): CicloFatura | null {
+  if (conta.tipo !== 'cartao_credito' || !conta.dia_fechamento) return null
+  const ref = parseISO(mesRef)
+  const fech = diaNoMes(ref, conta.dia_fechamento)
+  const fechAnterior = diaNoMes(addMonths(ref, -1), conta.dia_fechamento)
+  const inicio = new Date(fechAnterior)
+  inicio.setDate(inicio.getDate() + 1)
+  const diaVenc = conta.dia_vencimento ?? conta.dia_fechamento
+  const mesVenc = diaVenc > conta.dia_fechamento ? ref : addMonths(ref, 1)
+  const vencimento = diaNoMes(mesVenc, diaVenc)
+  return { mesRef, inicioISO: iso(inicio), fimISO: iso(fech), vencimentoISO: iso(vencimento) }
+}
+
+/** mesRef (mês de fechamento) da fatura que está aberta em `hoje`. */
+export function mesRefFaturaAberta(conta: Conta, hoje: Date = new Date()): string {
+  const fech = conta.dia_fechamento ?? 1
+  const ref = startOfMonth(hoje)
+  const fechHoje = diaNoMes(ref, fech)
+  return iso(hoje <= fechHoje ? ref : startOfMonth(addMonths(hoje, 1)))
+}
+
+/** Fatura de um cartão para a competência `mesRef`. */
+export function faturaDe(
+  lancamentos: Lancamento[],
+  conta: Conta,
+  mesRef: string,
+  hoje: Date = new Date()
+): FaturaInfo | null {
+  const ciclo = cicloFatura(conta, mesRef)
+  if (!ciclo) return null
+  const itens = lancamentos.filter(
+    (l) => l.conta_id === conta.id && l.data >= ciclo.inicioISO && l.data <= ciclo.fimISO
+  )
+  const total = round2(itens.reduce((s, l) => s + Number(l.valor), 0))
+  const hojeISO = iso(hoje)
+  const estado: EstadoFatura =
+    hojeISO < ciclo.inicioISO ? 'futura' : hojeISO <= ciclo.fimISO ? 'aberta' : 'fechada'
+  const diasAteVencimento = differenceInCalendarDays(parseISO(ciclo.vencimentoISO), hoje)
+  const limite = conta.limite != null ? Number(conta.limite) : null
+  const usoLimite = limite && limite > 0 ? round2(total / limite) : null
+  return {
+    ciclo,
+    itens,
+    total,
+    estado,
+    diasAteVencimento,
+    vencida: estado === 'fechada' && diasAteVencimento < 0,
+    limite,
+    usoLimite,
+  }
+}
+
+/** Fatura atualmente aberta (acumulando) do cartão. */
+export function faturaAberta(lancamentos: Lancamento[], conta: Conta, hoje: Date = new Date()): FaturaInfo | null {
+  return faturaDe(lancamentos, conta, mesRefFaturaAberta(conta, hoje), hoje)
+}
+
+/**
+ * Fatura já fechada e ainda a pagar (a que você quita em breve): o ciclo anterior
+ * ao aberto, se já fechou. Null se ainda não há fatura fechada pendente.
+ */
+export function faturaAPagar(lancamentos: Lancamento[], conta: Conta, hoje: Date = new Date()): FaturaInfo | null {
+  const anterior = navegarMes(mesRefFaturaAberta(conta, hoje), -1)
+  const f = faturaDe(lancamentos, conta, anterior, hoje)
+  return f && f.estado === 'fechada' && f.total > 0 ? f : null
+}
+
+// ------------------------------------------------------------------
+//  Contas do mês — agenda de contas a pagar (lançamentos previstos)
+// ------------------------------------------------------------------
+
+/** Tipos de lançamento que representam algo a pagar. */
+const TIPOS_A_PAGAR: TipoLancamento[] = ['despesa', 'imposto', 'emprestimo']
+
+export interface ContaAPagar {
+  lancamento: Lancamento
+  vencida: boolean
+}
+
+export interface ContasDoMes {
+  itens: ContaAPagar[]
+  total: number
+  totalVencido: number
+  qtdVencida: number
+}
+
+/**
+ * Contas a pagar do mês: lançamentos `previsto` (não quitados) de tipos que se
+ * paga, ordenados por data. Marca como vencida quando a data já passou de hoje.
+ */
+export function contasDoMes(lancamentos: Lancamento[], mesRef: string, hoje: Date = new Date()): ContasDoMes {
+  const hojeISO = iso(hoje)
+  const itens = lancamentos
+    .filter((l) => l.status === 'previsto' && TIPOS_A_PAGAR.includes(l.tipo) && noMes(l.data, mesRef))
+    .sort((a, b) => (a.data < b.data ? -1 : a.data > b.data ? 1 : 0))
+    .map((l) => ({ lancamento: l, vencida: l.data < hojeISO }))
+  const total = round2(itens.reduce((s, x) => s + Number(x.lancamento.valor), 0))
+  const vencidas = itens.filter((x) => x.vencida)
+  return {
+    itens,
+    total,
+    totalVencido: round2(vencidas.reduce((s, x) => s + Number(x.lancamento.valor), 0)),
+    qtdVencida: vencidas.length,
+  }
+}
+
+export interface FaturaAVencer {
+  conta: Conta
+  fatura: FaturaInfo
+}
+
+/**
+ * Cartões com fatura fechada a pagar cujo vencimento cai dentro de `dentroDeDias`
+ * (ou já venceu). Ordenado por urgência (vencimento mais próximo/atrasado primeiro).
+ */
+export function faturasAVencer(dados: Dados, hoje: Date = new Date(), dentroDeDias = 7): FaturaAVencer[] {
+  return dados.contas
+    .filter((c) => c.ativo && c.tipo === 'cartao_credito' && c.dia_fechamento)
+    .map((conta) => ({ conta, fatura: faturaAPagar(dados.lancamentos, conta, hoje) }))
+    .filter((x): x is FaturaAVencer => x.fatura != null && x.fatura.diasAteVencimento <= dentroDeDias)
+    .sort((a, b) => a.fatura.diasAteVencimento - b.fatura.diasAteVencimento)
 }
 
 /** meses que possuem algum lançamento, mais recente primeiro. */

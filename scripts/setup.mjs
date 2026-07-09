@@ -63,10 +63,50 @@ async function main() {
   await client.query(readFileSync(join(__dirname, 'schema.sql'), 'utf8'))
   console.log('✓ Schema/RLS/triggers aplicados')
 
-  // ---------- limpa dados (idempotente) ----------
+  // ---------- limpa dados de negócio (mantém auth.users) ----------
   await client.query(
-    'truncate desejos, lancamentos, orcamentos, metas, categorias, contas, pessoas restart identity cascade'
+    'truncate desejos, lancamentos, orcamentos, metas, categorias, contas, pessoas, workspace_invites, workspace_members, profiles, workspaces restart identity cascade'
   )
+
+  await client.end()
+
+  // ---------- usuário de login (dispara handle_new_user → workspace + seed básico) ----------
+  console.log('\n→ Criando usuário de login ...')
+  const supa = createClient(cred.url, cred.serviceRole, { auth: { persistSession: false } })
+  const { error } = await supa.auth.admin.createUser({
+    email: LOGIN_EMAIL,
+    password: LOGIN_SENHA,
+    email_confirm: true,
+  })
+  if (error) {
+    if (/already|registered|exists/i.test(error.message)) console.log(`· Usuário já existe (${LOGIN_EMAIL})`)
+    else console.log(`! Erro ao criar usuário: ${error.message}`)
+  } else {
+    console.log(`✓ Usuário criado: ${LOGIN_EMAIL}`)
+  }
+
+  // Reconecta para seed completo no workspace do usuário
+  await client.connect()
+
+  const { rows: userRows } = await client.query(
+    `select id from auth.users where email = $1 limit 1`,
+    [LOGIN_EMAIL]
+  )
+  if (!userRows.length) throw new Error(`Usuário ${LOGIN_EMAIL} não encontrado após criação`)
+  const userId = userRows[0].id
+
+  let { rows: profRows } = await client.query('select active_workspace_id from profiles where user_id = $1', [userId])
+  if (!profRows.length) {
+    const wsRes = await client.query(`insert into workspaces (nome, criado_por) values ('Nossa Grana', $1) returning id`, [userId])
+    const wsId = wsRes.rows[0].id
+    await client.query(`insert into workspace_members (workspace_id, user_id, papel) values ($1, $2, 'dono')`, [wsId, userId])
+    await client.query(`insert into profiles (user_id, active_workspace_id) values ($1, $2)`, [userId, wsId])
+    profRows = [{ active_workspace_id: wsId }]
+  }
+  const WS = profRows[0].active_workspace_id
+
+  // Limpa seed básico do trigger para inserir seed completo
+  await client.query('truncate desejos, lancamentos, orcamentos, metas, categorias, contas, pessoas restart identity cascade')
 
   // ---------- pessoas ----------
   const pessoas = [
@@ -77,7 +117,7 @@ async function main() {
   ]
   const pessoaId = {}
   for (const [nome, cor] of pessoas) {
-    const r = await client.query('insert into pessoas (nome, cor) values ($1,$2) returning id', [nome, cor])
+    const r = await client.query('insert into pessoas (nome, cor, workspace_id) values ($1,$2,$3) returning id', [nome, cor, WS])
     pessoaId[nome] = r.rows[0].id
   }
   console.log(`✓ ${pessoas.length} pessoas`)
@@ -98,8 +138,8 @@ async function main() {
   const contaDono = {}
   for (const [nome, tipo, dono, cor] of contas) {
     const r = await client.query(
-      'insert into contas (nome, tipo, dono_id, cor) values ($1,$2,$3,$4) returning id',
-      [nome, tipo, pessoaId[dono], cor]
+      'insert into contas (nome, tipo, dono_id, cor, workspace_id) values ($1,$2,$3,$4,$5) returning id',
+      [nome, tipo, pessoaId[dono], cor, WS]
     )
     contaId[nome] = r.rows[0].id
     contaDono[nome] = dono
@@ -129,8 +169,8 @@ async function main() {
   const catId = {}
   for (const [nome, grupo, tipo, dono, cor, icone] of categorias) {
     const r = await client.query(
-      'insert into categorias (nome, grupo, tipo_reserva, dono_id, cor, icone) values ($1,$2,$3,$4,$5,$6) returning id',
-      [nome, grupo, tipo, dono ? pessoaId[dono] : null, cor, icone]
+      'insert into categorias (nome, grupo, tipo_reserva, dono_id, cor, icone, workspace_id) values ($1,$2,$3,$4,$5,$6,$7) returning id',
+      [nome, grupo, tipo, dono ? pessoaId[dono] : null, cor, icone, WS]
     )
     catId[nome] = r.rows[0].id
   }
@@ -148,8 +188,8 @@ async function main() {
   const metaId = {}
   for (const [nome, tipo, alvo, dataAlvo, cor, icone, desc] of metas) {
     const r = await client.query(
-      'insert into metas (nome, tipo, valor_alvo, data_alvo, cor, icone, descricao) values ($1,$2,$3,$4,$5,$6,$7) returning id',
-      [nome, tipo, alvo, dataAlvo, cor, icone, desc]
+      'insert into metas (nome, tipo, valor_alvo, data_alvo, cor, icone, descricao, workspace_id) values ($1,$2,$3,$4,$5,$6,$7,$8) returning id',
+      [nome, tipo, alvo, dataAlvo, cor, icone, desc, WS]
     )
     metaId[nome] = r.rows[0].id
   }
@@ -171,8 +211,8 @@ async function main() {
     await client.query(
       `insert into lancamentos
        (descricao, valor, data, tipo, conta_id, categoria_id, dono_id, meta_id,
-        parcela_atual, parcela_total, valor_total, data_primeira_parcela, recorrente, frequencia, privado, observacao)
-       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16)`,
+        parcela_atual, parcela_total, valor_total, data_primeira_parcela, recorrente, frequencia, privado, observacao, workspace_id)
+       values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)`,
       [
         t.descricao,
         t.valor,
@@ -190,6 +230,7 @@ async function main() {
         'mensal',
         false,
         t.observacao,
+        WS,
       ]
     )
     nImport++
@@ -212,16 +253,16 @@ async function main() {
   const todosOrc = { ...orcFixos, ...orcInferidos }
   for (const [cat, valor] of Object.entries(todosOrc)) {
     await client.query(
-      'insert into orcamentos (categoria_id, mes_referencia, valor_estabelecido, recorrente) values ($1,$2,$3,true)',
-      [catId[cat], MES, valor]
+      'insert into orcamentos (categoria_id, mes_referencia, valor_estabelecido, recorrente, workspace_id) values ($1,$2,$3,true,$4)',
+      [catId[cat], MES, valor, WS]
     )
   }
   console.log(`✓ ${Object.keys(todosOrc).length} envelopes (orçamentos)`)
 
   // ---------- renda prevista (padrão recorrente) ----------
   await client.query(
-    'insert into rendas (mes_referencia, valor, recorrente) values ($1, $2, true) on conflict (mes_referencia) do nothing',
-    [MES, salario ?? 8000]
+    'insert into rendas (mes_referencia, valor, recorrente, workspace_id) values ($1, $2, true, $3) on conflict (workspace_id, mes_referencia) do nothing',
+    [MES, salario ?? 8000, WS]
   )
   console.log('✓ renda prevista padrão')
 
@@ -243,22 +284,6 @@ async function main() {
   console.log(`  Salário (planilha): R$ ${salario}`)
 
   await client.end()
-
-  // ---------- usuário de login ----------
-  console.log('\n→ Criando usuário de login ...')
-  const supa = createClient(cred.url, cred.serviceRole, { auth: { persistSession: false } })
-  const { error } = await supa.auth.admin.createUser({
-    email: LOGIN_EMAIL,
-    password: LOGIN_SENHA,
-    email_confirm: true,
-  })
-  if (error) {
-    if (/already|registered|exists/i.test(error.message)) console.log(`· Usuário já existe (${LOGIN_EMAIL})`)
-    else console.log(`! Erro ao criar usuário: ${error.message}`)
-  } else {
-    console.log(`✓ Usuário criado: ${LOGIN_EMAIL}`)
-  }
-
   console.log('\n✅ Setup concluído.')
 }
 

@@ -18,10 +18,14 @@ import {
   lancsDoMes,
   lancamentosAPagarNoMes,
   byId,
+  faturasAVencer,
 } from '@/lib/calc'
 import { money, pct, dataCurta } from '@/lib/format'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { EnvelopeCard } from '@/components/EnvelopeCard'
+import { ContasDoMesCard } from '@/components/ContasDoMesCard'
+import { InsightsCard } from '@/components/InsightsCard'
+import { OnboardingCard } from '@/components/OnboardingCard'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
 import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Progress } from '@/components/ui/progress'
@@ -55,6 +59,7 @@ export function DashboardPage() {
     .filter((l) => ehParcelado(l))
     .sort((a, b) => Number(b.valor) - Number(a.valor))
     .slice(0, 5)
+  const faturas = faturasAVencer(dados)
 
   const pctR = real.pctRenda
   const heroCor = pctR >= 1 ? 'text-destructive' : pctR >= 0.8 ? 'text-warning-foreground' : 'text-foreground'
@@ -74,6 +79,40 @@ export function DashboardPage() {
         </div>
         <MonthSelector />
       </header>
+
+      {/* Onboarding — só na 1ª vez, até concluir/dispensar */}
+      <OnboardingCard dados={dados} />
+
+      {/* Faturas de cartão a vencer */}
+      {faturas.length > 0 && (
+        <div className="space-y-2">
+          {faturas.map(({ conta, fatura }) => (
+            <Link key={conta.id} to={`/contas/${conta.id}`} className="block">
+              <Card
+                className={cn(
+                  'p-3 flex items-center gap-3 border',
+                  fatura.vencida ? 'border-destructive/40 bg-destructive/5' : 'border-warning/40 bg-warning/5'
+                )}
+              >
+                <CalendarClock className={cn('h-5 w-5 shrink-0', fatura.vencida ? 'text-destructive' : 'text-warning-foreground')} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold truncate">
+                    Fatura {conta.nome} · {money(fatura.total)}
+                  </p>
+                  <p className={cn('text-xs', fatura.vencida ? 'text-destructive' : 'text-muted-foreground')}>
+                    {fatura.vencida
+                      ? `venceu ${dataCurta(fatura.ciclo.vencimentoISO)}`
+                      : fatura.diasAteVencimento === 0
+                        ? 'vence hoje'
+                        : `vence em ${fatura.diasAteVencimento} ${fatura.diasAteVencimento === 1 ? 'dia' : 'dias'} · ${dataCurta(fatura.ciclo.vencimentoISO)}`}
+                  </p>
+                </div>
+                <ArrowRight className="h-4 w-4 text-muted-foreground shrink-0" />
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
 
       {/* Hero — quanto você já gastou de verdade */}
       <Card className="overflow-hidden">
@@ -129,6 +168,12 @@ export function DashboardPage() {
         <MiniStat titulo="Investido" valor={real.investido} cor="text-success" />
         <MiniStat titulo="Sobra" valor={real.saldoReal} cor={real.saldoReal >= 0 ? 'text-success' : 'text-destructive'} />
       </div>
+
+      {/* Contas do mês — agenda de contas a pagar */}
+      <ContasDoMesCard lancamentos={dados.lancamentos} mesRef={mesRef} catMap={catMap} />
+
+      {/* Insights — comparação com a média recente */}
+      <InsightsCard dados={dados} mesRef={mesRef} />
 
       {/* Com o que você gastou — por categoria */}
       {topCategorias.length > 0 && (

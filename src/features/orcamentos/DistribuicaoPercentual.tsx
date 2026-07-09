@@ -18,8 +18,9 @@ const ORDEM_TIPO: Record<string, number> = {
   imposto: 3,
 }
 
-const clampPct = (value: number) => Math.max(0, Math.min(100, Math.round(value)))
-const pctText = (value: number) => `${Math.round(value)}%`
+const clampPct = (value: number) => Math.max(0, Math.min(100, Math.round(value * 100) / 100))
+// mostra até 2 casas, com vírgula, sem zeros à toa (10% / 1,5% / 12,25%)
+const pctText = (value: number) => `${(Math.round(value * 100) / 100).toLocaleString('pt-BR', { maximumFractionDigits: 2 })}%`
 const roundMoney = (value: number) => Math.round(value * 100) / 100
 
 export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados; mesRef: string; renda: number }) {
@@ -181,12 +182,14 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
                         <label className="flex shrink-0 items-center gap-1">
                           <input
                             type="number"
+                            inputMode="decimal"
                             min={0}
                             max={100}
-                            step={1}
+                            step="any"
                             value={value}
-                            onChange={(e) => alterar(c.id, Number(e.target.value))}
+                            onChange={(e) => alterar(c.id, Number(e.target.value.replace(',', '.')) || 0)}
                             className="h-11 w-16 rounded-lg border bg-background px-2 text-right text-sm font-bold tabular-nums"
+                            aria-label={`${c.nome} em percentual`}
                           />
                           <span className="text-sm font-semibold text-muted-foreground">%</span>
                         </label>
@@ -196,7 +199,7 @@ export function DistribuicaoPercentual({ dados, mesRef, renda }: { dados: Dados;
                           type="range"
                           min={0}
                           max={100}
-                          step={1}
+                          step={0.5}
                           value={value}
                           onChange={(e) => alterar(c.id, Number(e.target.value))}
                           className="h-3 w-full cursor-pointer"

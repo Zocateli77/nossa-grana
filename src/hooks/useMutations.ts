@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { supabase } from '@/lib/supabase'
-import type { Categoria, Desejo, Lancamento, Meta, NovoDesejo, NovoLancamento, Orcamento, Renda, TipoValorOrcamento } from '@/types/db'
+import type { Categoria, Conta, Desejo, Lancamento, Meta, NovoDesejo, NovoLancamento, Orcamento, Renda, TipoValorOrcamento } from '@/types/db'
 import { expandirSerie, parcelasFaltam, type BaseSerie } from '@/lib/calc'
 import { iso } from '@/lib/dates'
 
@@ -132,6 +132,18 @@ export function useExcluirLancamento() {
   })
 }
 
+/** Reinsere um lançamento excluído (para o "Desfazer"), preservando o id. */
+export function useReinserirLancamento() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (l: Lancamento) => {
+      const { error } = await supabase.from('lancamentos').insert(l)
+      if (error) throw error
+    },
+    onSuccess: () => invalidate(['lancamentos', 'metas']),
+  })
+}
+
 export function useMarcarLancamentosComoPagos() {
   const invalidate = useInvalidate()
   return useMutation({
@@ -245,7 +257,7 @@ export function useSalvarOrcamento() {
     }) => {
       const { data, error } = await supabase
         .from('orcamentos')
-        .upsert(input, { onConflict: 'categoria_id,mes_referencia' })
+        .upsert(input, { onConflict: 'workspace_id,categoria_id,mes_referencia' })
         .select()
         .single()
       if (error) throw error
@@ -285,7 +297,7 @@ export function useSalvarRenda() {
     mutationFn: async (input: { mes_referencia: string; valor: number; recorrente?: boolean }) => {
       const { data, error } = await supabase
         .from('rendas')
-        .upsert(input, { onConflict: 'mes_referencia' })
+        .upsert(input, { onConflict: 'workspace_id,mes_referencia' })
         .select()
         .single()
       if (error) throw error
@@ -366,6 +378,47 @@ export function useSalvarCategoria() {
       return data
     },
     onSuccess: () => invalidate(['categorias']),
+  })
+}
+
+/** Marca um lançamento previsto como pago (com atualização otimista). */
+export function useMarcarPago() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('lancamentos').update({ status: 'pago', pago: true }).eq('id', id)
+      if (error) throw error
+    },
+    onMutate: async (id: string) => {
+      await qc.cancelQueries({ queryKey: ['lancamentos'] })
+      const prev = qc.getQueryData<Lancamento[]>(['lancamentos'])
+      qc.setQueryData<Lancamento[]>(['lancamentos'], (old) =>
+        old?.map((l) => (l.id === id ? { ...l, status: 'pago', pago: true } : l))
+      )
+      return { prev }
+    },
+    onError: (_e, _id, ctx) => {
+      if (ctx?.prev) qc.setQueryData(['lancamentos'], ctx.prev)
+    },
+    onSettled: () => qc.invalidateQueries({ queryKey: ['lancamentos'] }),
+  })
+}
+
+export function useSalvarConta() {
+  const invalidate = useInvalidate()
+  return useMutation({
+    mutationFn: async (input: Partial<Conta> & { id?: string }) => {
+      const { id, ...payload } = input
+      if (id) {
+        const { data, error } = await supabase.from('contas').update(payload).eq('id', id).select().single()
+        if (error) throw error
+        return data
+      }
+      const { data, error } = await supabase.from('contas').insert(payload).select().single()
+      if (error) throw error
+      return data
+    },
+    onSuccess: () => invalidate(['contas']),
   })
 }
 

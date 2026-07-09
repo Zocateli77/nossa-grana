@@ -10,6 +10,7 @@ import {
   HandCoins,
   Gift,
   BarChart3,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -28,6 +29,7 @@ export const navPrincipal: NavItem[] = [
 ]
 
 export const navSecundario: NavItem[] = [
+  { to: '/ia', label: 'IA', icon: Sparkles },
   { to: '/dashboard', label: 'Dashboard', icon: BarChart3 },
   { to: '/desejos', label: 'Desejos', icon: Gift },
   { to: '/contas', label: 'Contas & Cartões', icon: CreditCard },

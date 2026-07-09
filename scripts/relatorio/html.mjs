@@ -120,9 +120,49 @@ function maioresBloco(gastos) {
     .join('')
 }
 
+function notasIa(d) {
+  const estourado = (d.envelopes || []).find((e) => e.estourou)
+  const noLimite = (d.envelopes || []).find((e) => !e.estourou && e.pct >= 0.9) || (d.envelopes || [])[0]
+  const maior = (d.maiores || [])[0]
+  const alerta = estourado
+    ? `${estourado.nome} passou do envelope em ${brl(estourado.gasto - estourado.estabelecido)}; vale decidir se foi excecao ou novo padrao.`
+    : (d.insights || [])[0]?.texto || `O mes esta com ${Math.round((d.resumo.pctRenda || 0) * 100)}% da renda comprometida.`
+  const sugestao = noLimite
+    ? `${noLimite.nome} esta em ${Math.round(noLimite.pct * 100)}% do envelope; uma pausa curta nessa categoria protege a sobra.`
+    : `Com sobra prevista de ${brl(d.resumo.sobra || 0)}, revisem antes de criar novos compromissos.`
+  const pergunta = maior
+    ? `O gasto ${maior.descricao} em ${maior.categoria || 'sem categoria'} precisa se repetir no proximo mes?`
+    : 'Qual gasto planejado ainda pode esperar uma semana antes de virar compromisso?'
+  return [alerta, sugestao, pergunta]
+}
+
+function notasIaBloco(notes) {
+  const items = notes
+    .slice(0, 3)
+    .map((note) => `<li style="margin:0 0 8px;color:${C.text};font-size:14px;line-height:1.45;">${escapeHtml(note)}</li>`)
+    .join('')
+  return `
+  <tr><td style="padding:0 32px 22px;">
+    <div style="border:1px solid ${C.border};background:${C.soft};border-radius:14px;padding:16px 18px;">
+      <div style="font-size:13px;text-transform:uppercase;letter-spacing:1px;color:${C.primary};font-weight:800;margin-bottom:10px;">Notas da IA</div>
+      <ol style="padding-left:20px;margin:0;">${items}</ol>
+    </div>
+  </td></tr>`
+}
+
+function escapeHtml(value) {
+  return String(value)
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;')
+}
+
 export function gerarHtml(d) {
   const { resumo, secoes } = d
   const partes = [secaoTitulo(`Resumo de ${d.mesNome}`), resumoBloco(resumo)]
+  const notas = notasIaBloco(notasIa(d))
   if (secoes.envelopes) partes.push(secaoTitulo('Envelopes no limite'), envelopesBloco(d.envelopes))
   if (secoes.insights) partes.push(secaoTitulo('Percebi que…'), insightsBloco(d.insights))
   if (secoes.maiores) partes.push(secaoTitulo('Maiores contas do mês'), maioresBloco(d.maiores))
@@ -143,6 +183,7 @@ export function gerarHtml(d) {
       <a href="${APP_URL}" style="display:inline-block;background:${C.primary};color:#ffffff;text-decoration:none;padding:14px 30px;border-radius:12px;font-weight:700;font-size:15px;">Abrir o Nossa Grana</a>
     </td></tr></table>
   </td></tr>
+  ${notas}
   <tr><td style="padding:18px 32px;background:${C.soft};border-top:1px solid ${C.border};text-align:center;">
     <div style="font-size:12px;color:${C.muted};line-height:1.6;">Relatório automático do casal · seg, qua, sex e dom.<br>Paz com o dinheiro, todo dia. 💚</div>
   </td></tr>

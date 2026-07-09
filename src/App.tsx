@@ -25,6 +25,7 @@ import { FuturoPage } from '@/features/futuro/FuturoPage'
 import { DividasPage } from '@/features/dividas/DividasPage'
 import { DesejosPage } from '@/features/desejos/DesejosPage'
 import { ConfigPage } from '@/features/config/ConfigPage'
+import { IAPage } from '@/features/ia/IAPage'
 
 function TelaCarregando() {
   return (
@@ -119,6 +120,7 @@ function AppAutenticado() {
         <Route path="/lancamentos/novo" element={<NovoLancamentoPage />} />
         <Route path="/lancamentos/:id/editar" element={<NovoLancamentoPage />} />
         <Route path="/massa" element={<MassaPage />} />
+        <Route path="/ia" element={<IAPage />} />
         <Route path="/orcamentos" element={<OrcamentosPage />} />
         <Route path="/contas" element={<ContasPage />} />
         <Route path="/contas/:id" element={<ContasPage />} />

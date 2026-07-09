@@ -27,6 +27,7 @@ import { ContasDoMesCard } from '@/components/ContasDoMesCard'
 import { InsightsCard } from '@/components/InsightsCard'
 import { OnboardingCard } from '@/components/OnboardingCard'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
+import { AIQuickLink } from '@/components/AIQuickLink'
 import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Progress } from '@/components/ui/progress'
 import { Card } from '@/components/ui/card'
@@ -77,7 +78,10 @@ export function DashboardPage() {
           <p className="text-sm text-muted-foreground">Olá! 👋</p>
           <h1 className="text-xl font-extrabold tracking-tight">Visão do mês</h1>
         </div>
-        <MonthSelector />
+        <div className="flex items-center gap-2">
+          <AIQuickLink prompt="Analise minha visao do mes e diga onde devemos ajustar primeiro." label="IA" />
+          <MonthSelector />
+        </div>
       </header>
 
       {/* Onboarding — só na 1ª vez, até concluir/dispensar */}

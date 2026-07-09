@@ -8,6 +8,9 @@ export type StatusDesejo = 'desejo' | 'avaliando' | 'planejado' | 'pronto' | 'co
 export type PrioridadeDesejo = 'baixa' | 'media' | 'alta'
 export type PapelWorkspace = 'dono' | 'membro'
 export type StatusConvite = 'pendente' | 'aceito' | 'revogado'
+export type AiActionStatus = 'pending' | 'confirmed' | 'rejected' | 'failed'
+export type AiConversationStatus = 'aberta' | 'arquivada'
+export type AiMemoryStatus = 'aprovada' | 'arquivada'
 
 export interface Workspace {
   id: string
@@ -27,6 +30,7 @@ export interface Profile {
   user_id: string
   active_workspace_id: string | null
   nome: string | null
+  email: string | null
   /** null = onboarding ainda não visto; timestamp = concluído/dispensado */
   onboarding_em: string | null
   criado_em: string
@@ -41,6 +45,97 @@ export interface Convite {
   status: StatusConvite
   convidado_por: string | null
   criado_em: string
+}
+
+export interface AiConversation {
+  id: string
+  workspace_id: string
+  user_id: string | null
+  titulo: string | null
+  status: AiConversationStatus
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface AiMessage {
+  id: string
+  workspace_id: string
+  conversation_id: string | null
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  model: string | null
+  input_tokens: number
+  output_tokens: number
+  action_draft_id: string | null
+  criado_em: string
+}
+
+export interface AiMemory {
+  id: string
+  workspace_id: string
+  key: string
+  value: string
+  status: AiMemoryStatus
+  approved_by: string | null
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface AiActionDraftRecord {
+  id: string
+  workspace_id: string
+  conversation_id: string | null
+  created_by: string | null
+  type: 'orcamento.upsert' | 'lancamento.insert' | 'meta.update' | 'desejo.upsert' | 'conta.upsert'
+  title: string
+  summary: string
+  payload: Record<string, unknown>
+  impact: Record<string, unknown> | null
+  status: AiActionStatus
+  confirmed_by: string | null
+  confirmed_at: string | null
+  result: Record<string, unknown> | null
+  error: string | null
+  criado_em: string
+  atualizado_em: string
+}
+
+export interface AiUsageEventRecord {
+  id: string
+  workspace_id: string
+  conversation_id: string | null
+  message_id: string | null
+  model: string
+  input_tokens: number
+  output_tokens: number
+  cost_usd: number
+  criado_em: string
+}
+
+export interface EmailReportRun {
+  id: string
+  workspace_id: string
+  run_key: string
+  report_date: string
+  status: 'pending' | 'sent' | 'failed'
+  recipients: string[]
+  ai_notes: string[]
+  provider_message_id: string | null
+  error: string | null
+  criado_em: string
+  sent_at: string | null
+}
+
+export interface ReportPreferences {
+  workspace_id: string
+  enabled: boolean
+  send_day: number
+  send_hour: number
+  provider: 'resend'
+  recipients_mode: 'members' | 'custom'
+  recipients: string[]
+  criado_em: string
+  atualizado_em: string
 }
 
 export interface Pessoa {

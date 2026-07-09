@@ -7,6 +7,7 @@ import { progressoMeta } from '@/lib/calc'
 import { money } from '@/lib/format'
 import { mesCurto } from '@/lib/format'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
+import { AIQuickLink } from '@/components/AIQuickLink'
 import { Carregando, Vazio } from '@/components/Estados'
 import { Card } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
@@ -27,7 +28,10 @@ export function MetasPage() {
     <div>
       <header className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-extrabold tracking-tight">Metas</h1>
-        <Button size="sm" onClick={() => setNova(true)}><Plus className="h-4 w-4" /> Nova</Button>
+        <div className="flex items-center gap-2">
+          <AIQuickLink prompt="Revise minhas metas e sugira prioridade de aportes para este mes." label="IA" />
+          <Button size="sm" onClick={() => setNova(true)}><Plus className="h-4 w-4" /> Nova</Button>
+        </div>
       </header>
 
       {dados.metas.length === 0 ? (

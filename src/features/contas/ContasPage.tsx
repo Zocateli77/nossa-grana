@@ -8,6 +8,7 @@ import { money, dataCurta } from '@/lib/format'
 import type { TipoConta } from '@/types/db'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
+import { AIQuickLink } from '@/components/AIQuickLink'
 import { FaturaCartao } from '@/components/FaturaCartao'
 import { CartaoConfigDialog } from '@/components/CartaoConfigDialog'
 import { Carregando, Vazio } from '@/components/Estados'
@@ -58,7 +59,8 @@ export function ContasPage() {
         <Button variant="ghost" size="icon" className="h-11 w-11" onClick={() => navigate('/contas')} aria-label="Voltar">
           <ArrowLeft className="h-5 w-5" />
         </Button>
-        <h1 className="text-xl font-extrabold tracking-tight truncate">{conta.nome}</h1>
+        <h1 className="text-xl font-extrabold tracking-tight truncate flex-1">{conta.nome}</h1>
+        <AIQuickLink prompt={`Analise os gastos da conta ${conta.nome} e sugira ajustes.`} label="IA" />
       </header>
     )
 
@@ -71,6 +73,7 @@ export function ContasPage() {
               <ArrowLeft className="h-5 w-5" />
             </Button>
             <h1 className="text-xl font-extrabold tracking-tight truncate flex-1">{conta.nome}</h1>
+            <AIQuickLink prompt={`Analise a fatura do cartao ${conta.nome} e encontre riscos ou ajustes.`} label="IA" />
             <CartaoConfigDialog conta={conta} />
           </header>
           {conta.dia_fechamento ? (
@@ -129,7 +132,10 @@ export function ContasPage() {
     <div>
       <header className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-extrabold tracking-tight">Contas & Cartões</h1>
-        <MonthSelector />
+        <div className="flex items-center gap-2">
+          <AIQuickLink prompt="Analise minhas contas e cartoes e diga onde o caixa esta mais pressionado." label="IA" />
+          <MonthSelector />
+        </div>
       </header>
       <Card className="p-4 mb-4">
         <span className="text-sm text-muted-foreground">Total do mês (todas as contas)</span>

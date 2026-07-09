@@ -5,6 +5,7 @@ import { useDados } from '@/hooks/useDados'
 import { useApp } from '@/contexts/AppContext'
 import { projecao, dividas } from '@/lib/calc'
 import { money, moneyCompact, mesCurto, mesExtenso } from '@/lib/format'
+import { AIQuickLink } from '@/components/AIQuickLink'
 import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -26,8 +27,10 @@ export function FuturoPage() {
 
   return (
     <div>
-      <header className="flex items-center justify-between mb-3">
+      <header className="flex flex-wrap items-center justify-between gap-2 mb-3">
         <h1 className="text-xl font-extrabold tracking-tight">Futuro</h1>
+        <div className="flex items-center gap-2">
+          <AIQuickLink prompt="Revise minha projecao futura e diga quais meses precisam de ajuste." label="IA" />
         <div className="flex gap-1 rounded-xl bg-muted p-1" role="group" aria-label="Horizonte de projeção">
           {HORIZONTES.map((h) => (
             <button
@@ -43,6 +46,7 @@ export function FuturoPage() {
               {h}m
             </button>
           ))}
+        </div>
         </div>
       </header>
 

@@ -25,6 +25,21 @@ em `env.Supabase.txt`, fora do git).
 VITE_SUPABASE_URL=https://your-project.supabase.co
 VITE_SUPABASE_ANON_KEY=your-publishable-anon-key
 ```
+
+### Variaveis server-only (Vercel Functions)
+```
+SUPABASE_SERVICE_ROLE_KEY=your-service-role-key
+OPENAI_API_KEY=sk-your-key
+RESEND_API_KEY=re_your-key
+EMAIL_FROM="Nossa Grana <relatorios@example.com>"
+APP_URL=https://nossa-grana.vercel.app
+CRON_SECRET=change-me
+OPENAI_CHAT_MODEL=gpt-5.4-mini
+OPENAI_CHEAP_MODEL=gpt-5.4-nano
+```
+Essas chaves ficam somente no ambiente da Vercel. Elas alimentam `/api/ai/chat`, confirmacao de acoes,
+preview do relatorio e o cron dominical (`0 11 * * 0`, 08:00 em America/Sao_Paulo).
+
 > O frontend usa **apenas** a publishable key. A `service_role` e a senha do banco ficam só nos scripts
 > locais (`env.Supabase.txt`, fora do git) e nunca vão para o bundle.
 

@@ -10,6 +10,7 @@ import { money, pct, mesExtenso } from '@/lib/format'
 import type { Categoria } from '@/types/db'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
+import { AIQuickLink } from '@/components/AIQuickLink'
 import { corEstado } from '@/components/EnvelopeCard'
 import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Progress } from '@/components/ui/progress'
@@ -46,7 +47,10 @@ export function OrcamentosPage() {
     <div>
       <header className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-extrabold tracking-tight">Envelopes</h1>
-        <MonthSelector />
+        <div className="flex items-center gap-2">
+          <AIQuickLink prompt="Revise meus envelopes deste mes e sugira ajustes para caber melhor." label="IA" />
+          <MonthSelector />
+        </div>
       </header>
 
       <AlocacaoRenda dados={dados} mesRef={mesRef} renda={renda} onEditarRenda={() => setEditarRenda(true)} />

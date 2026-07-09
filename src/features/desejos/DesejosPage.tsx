@@ -9,6 +9,7 @@ import { money, mesCurto } from '@/lib/format'
 import type { Desejo, PrioridadeDesejo, StatusDesejo } from '@/types/db'
 import { Carregando, SecaoTitulo, Vazio } from '@/components/Estados'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
+import { AIQuickLink } from '@/components/AIQuickLink'
 import { MoneyInput } from '@/components/MoneyInput'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -73,9 +74,12 @@ export function DesejosPage() {
           <p className="text-sm text-muted-foreground">Compras planejadas</p>
           <h1 className="text-xl font-extrabold tracking-tight">Desejos</h1>
         </div>
-        <Button size="sm" onClick={() => setNovoAberto(true)}>
-          <Plus className="h-4 w-4" /> Novo
-        </Button>
+        <div className="flex items-center gap-2">
+          <AIQuickLink prompt="Olhe meus desejos e diga o que cabe agora, o que deve esperar e onde ajustar envelopes." label="IA" />
+          <Button size="sm" onClick={() => setNovoAberto(true)}>
+            <Plus className="h-4 w-4" /> Novo
+          </Button>
+        </div>
       </header>
 
       <div className="grid grid-cols-3 gap-3">

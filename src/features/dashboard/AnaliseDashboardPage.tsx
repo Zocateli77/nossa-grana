@@ -25,6 +25,7 @@ import {
 import { money, moneyCompact, pct, mesCurto } from '@/lib/format'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
+import { AIQuickLink } from '@/components/AIQuickLink'
 import { Carregando, SecaoTitulo } from '@/components/Estados'
 import { Progress } from '@/components/ui/progress'
 import { Card } from '@/components/ui/card'
@@ -113,7 +114,10 @@ export function AnaliseDashboardPage() {
           <p className="text-sm text-muted-foreground">Análise consolidada</p>
           <h1 className="text-xl font-extrabold tracking-tight">Dashboard</h1>
         </div>
-        <MonthSelector />
+        <div className="flex items-center gap-2">
+          <AIQuickLink prompt="Analise meu dashboard consolidado e diga os principais riscos." label="IA" />
+          <MonthSelector />
+        </div>
       </header>
 
       {/* Hero — quanto ainda posso gastar */}

@@ -52,6 +52,8 @@ alter table workspace_invites add column if not exists status text not null defa
 alter table workspace_invites add column if not exists token uuid default gen_random_uuid();
 alter table workspace_invites add column if not exists convidado_por uuid references auth.users(id);
 alter table profiles add column if not exists nome text;
+alter table profiles add column if not exists email text;
+update profiles p set email = u.email from auth.users u where p.user_id = u.id and p.email is null;
 alter table profiles add column if not exists active_workspace_id uuid references workspaces(id);
 -- onboarding: null = ainda não visto; timestamp = concluído/dispensado (uma vez por usuário)
 alter table profiles add column if not exists onboarding_em timestamptz;
@@ -203,6 +205,108 @@ create index if not exists idx_desejos_mes_inicio on desejos (mes_inicio);
 create index if not exists idx_desejos_categoria on desejos (categoria_id);
 create index if not exists idx_desejos_conta on desejos (conta_id);
 
+-- 8) IA concierge / relatorios
+create table if not exists ai_conversations (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references workspaces(id) on delete cascade not null,
+  user_id uuid references auth.users(id),
+  titulo text,
+  status text not null default 'aberta' check (status in ('aberta','arquivada')),
+  criado_em timestamptz default now(),
+  atualizado_em timestamptz default now()
+);
+
+create table if not exists ai_messages (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references workspaces(id) on delete cascade not null,
+  conversation_id uuid references ai_conversations(id) on delete cascade,
+  role text not null check (role in ('user','assistant','system')),
+  content text not null,
+  model text,
+  input_tokens int not null default 0 check (input_tokens >= 0),
+  output_tokens int not null default 0 check (output_tokens >= 0),
+  action_draft_id uuid,
+  criado_em timestamptz default now()
+);
+
+create table if not exists ai_memories (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references workspaces(id) on delete cascade not null,
+  key text not null,
+  value text not null,
+  status text not null default 'aprovada' check (status in ('aprovada','arquivada')),
+  approved_by uuid references auth.users(id),
+  criado_em timestamptz default now(),
+  atualizado_em timestamptz default now(),
+  unique (workspace_id, key)
+);
+
+create table if not exists ai_action_drafts (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references workspaces(id) on delete cascade not null,
+  conversation_id uuid references ai_conversations(id) on delete set null,
+  created_by uuid references auth.users(id),
+  type text not null check (type in ('orcamento.upsert','lancamento.insert','meta.update','desejo.upsert','conta.upsert')),
+  title text not null,
+  summary text not null,
+  payload jsonb not null default '{}'::jsonb,
+  impact jsonb,
+  status text not null default 'pending' check (status in ('pending','confirmed','rejected','failed')),
+  confirmed_by uuid references auth.users(id),
+  confirmed_at timestamptz,
+  result jsonb,
+  error text,
+  criado_em timestamptz default now(),
+  atualizado_em timestamptz default now()
+);
+
+create table if not exists ai_usage_events (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references workspaces(id) on delete cascade not null,
+  conversation_id uuid references ai_conversations(id) on delete set null,
+  message_id uuid references ai_messages(id) on delete set null,
+  model text not null,
+  input_tokens int not null default 0 check (input_tokens >= 0),
+  output_tokens int not null default 0 check (output_tokens >= 0),
+  cost_usd numeric(12,6) not null default 0,
+  criado_em timestamptz default now()
+);
+
+create table if not exists email_report_runs (
+  id uuid primary key default gen_random_uuid(),
+  workspace_id uuid references workspaces(id) on delete cascade not null,
+  run_key text not null,
+  report_date date not null,
+  status text not null default 'pending' check (status in ('pending','sent','failed')),
+  recipients text[] not null default '{}',
+  ai_notes text[] not null default '{}',
+  provider_message_id text,
+  error text,
+  criado_em timestamptz default now(),
+  sent_at timestamptz,
+  unique (workspace_id, run_key)
+);
+
+create table if not exists report_preferences (
+  workspace_id uuid primary key references workspaces(id) on delete cascade,
+  enabled boolean not null default true,
+  send_day int not null default 0 check (send_day between 0 and 6),
+  send_hour int not null default 8 check (send_hour between 0 and 23),
+  provider text not null default 'resend',
+  recipients_mode text not null default 'members' check (recipients_mode in ('members','custom')),
+  recipients text[] not null default '{}',
+  criado_em timestamptz default now(),
+  atualizado_em timestamptz default now()
+);
+
+create index if not exists idx_ai_conversations_workspace on ai_conversations (workspace_id);
+create index if not exists idx_ai_messages_conversation on ai_messages (conversation_id);
+create index if not exists idx_ai_messages_workspace on ai_messages (workspace_id);
+create index if not exists idx_ai_memories_workspace on ai_memories (workspace_id);
+create index if not exists idx_ai_action_drafts_workspace_status on ai_action_drafts (workspace_id, status);
+create index if not exists idx_ai_usage_events_workspace on ai_usage_events (workspace_id);
+create index if not exists idx_email_report_runs_workspace_date on email_report_runs (workspace_id, report_date);
+
 -- ---------------------------------------------------------------------
 --  workspace_id nas tabelas de negócio (idempotente)
 -- ---------------------------------------------------------------------
@@ -210,6 +314,15 @@ do $$
 declare t text;
 begin
   foreach t in array array['pessoas','categorias','contas','metas','orcamentos','rendas','lancamentos','desejos'] loop
+    execute format('alter table %I add column if not exists workspace_id uuid references workspaces(id) on delete cascade', t);
+    execute format('create index if not exists idx_%s_workspace on %I (workspace_id)', t, t);
+  end loop;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['ai_conversations','ai_messages','ai_memories','ai_action_drafts','ai_usage_events','email_report_runs','report_preferences'] loop
     execute format('alter table %I add column if not exists workspace_id uuid references workspaces(id) on delete cascade', t);
     execute format('create index if not exists idx_%s_workspace on %I (workspace_id)', t, t);
   end loop;
@@ -321,6 +434,16 @@ begin
   end loop;
 end $$;
 
+do $$
+declare t text;
+begin
+  foreach t in array array['ai_conversations','ai_messages','ai_memories','ai_action_drafts','ai_usage_events','email_report_runs','report_preferences'] loop
+    execute format('drop trigger if exists trg_set_workspace_id on %I', t);
+    execute format(
+      'create trigger trg_set_workspace_id before insert on %I for each row execute function set_workspace_id()', t);
+  end loop;
+end $$;
+
 -- ---------------------------------------------------------------------
 --  Seed padrão de um workspace (pessoas + categorias)
 -- ---------------------------------------------------------------------
@@ -418,16 +541,19 @@ begin
       values (ws_id, p_user_id, 'dono', now());
   end if;
 
-  insert into profiles (user_id, active_workspace_id, nome)
+  insert into profiles (user_id, active_workspace_id, nome, email)
     values (
       p_user_id,
       ws_id,
       coalesce(
         (select raw_user_meta_data->>'nome' from auth.users where id = p_user_id),
         split_part((select email from auth.users where id = p_user_id), '@', 1)
-      )
+      ),
+      (select email from auth.users where id = p_user_id)
     )
-    on conflict (user_id) do update set active_workspace_id = excluded.active_workspace_id;
+    on conflict (user_id) do update set
+      active_workspace_id = excluded.active_workspace_id,
+      email = coalesce(excluded.email, profiles.email);
 
   perform seed_workspace_defaults(ws_id);
   return ws_id;
@@ -544,6 +670,16 @@ create trigger trg_atualizado_em_desejos
   before update on desejos
   for each row execute function set_atualizado_em();
 
+do $$
+declare t text;
+begin
+  foreach t in array array['ai_conversations','ai_memories','ai_action_drafts','report_preferences'] loop
+    execute format('drop trigger if exists trg_atualizado_em on %I', t);
+    execute format(
+      'create trigger trg_atualizado_em before update on %I for each row execute function set_atualizado_em()', t);
+  end loop;
+end $$;
+
 -- ---------------------------------------------------------------------
 --  RLS — isolamento por workspace
 -- ---------------------------------------------------------------------
@@ -557,6 +693,19 @@ begin
     execute format('drop policy if exists ws_isolation on %I', t);
     execute format(
       'create policy ws_isolation on %I for all to authenticated
+       using (workspace_id = current_workspace_id())
+       with check (workspace_id = current_workspace_id())', t);
+  end loop;
+end $$;
+
+do $$
+declare t text;
+begin
+  foreach t in array array['ai_conversations','ai_messages','ai_memories','ai_action_drafts','ai_usage_events','email_report_runs','report_preferences'] loop
+    execute format('alter table %I enable row level security', t);
+    execute format('drop policy if exists ai_ws_isolation on %I', t);
+    execute format(
+      'create policy ai_ws_isolation on %I for all to authenticated
        using (workspace_id = current_workspace_id())
        with check (workspace_id = current_workspace_id())', t);
   end loop;

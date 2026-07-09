@@ -12,6 +12,7 @@ import type { Lancamento, StatusLancamento, TipoLancamento } from '@/types/db'
 import { MonthSelector } from '@/components/layout/MonthSelector'
 import { CategoriaIcon } from '@/components/CategoriaIcon'
 import { EscopoSerieDialog } from '@/components/EscopoSerieDialog'
+import { AIQuickLink } from '@/components/AIQuickLink'
 import { Carregando, Vazio } from '@/components/Estados'
 import { Input } from '@/components/ui/input'
 import { Button } from '@/components/ui/button'
@@ -146,7 +147,10 @@ export function LancamentosPage() {
     <div>
       <header className="flex items-center justify-between mb-3">
         <h1 className="text-xl font-extrabold tracking-tight">Extrato</h1>
-        {!todosMeses && <MonthSelector />}
+        <div className="flex items-center gap-2">
+          <AIQuickLink prompt="Analise meu extrato e encontre gastos para revisar." label="IA" />
+          {!todosMeses && <MonthSelector />}
+        </div>
       </header>
 
       <div className="flex gap-2 mb-3">
